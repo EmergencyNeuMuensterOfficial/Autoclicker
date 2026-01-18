@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Autoclicker Ultimate - Bootstrapper & Updater
-Handles installation, updates, and launch of the application
+Autoclicker Ultimate - Complete Installer
 """
 
 import os
@@ -9,41 +8,62 @@ import sys
 import json
 import time
 import shutil
-import hashlib
-import zipfile
-import tarfile
 import platform
-import tempfile
 import threading
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, List
-import urllib.request
-import urllib.error
+import tkinter as tk
+from tkinter import ttk, scrolledtext, messagebox, font
 
 # ============== CONFIGURATION ==============
-APP_NAME = "ENM CLICKER"
-APP_VERSION = "0.0.1"
-REPO_URL = "https://github.com/EmergencyNeuMuensterOfficial/Autoclicker.git"  # Update with your repo
-RELEASE_URL = f"{REPO_URL}/releases/latest/download"
-CONFIG_DIR = Path.home() / f".{APP_NAME.lower().replace(' ', '_')}"
-INSTALL_DIR = CONFIG_DIR / "app"
-BACKUP_DIR = CONFIG_DIR / "backups"
-LOG_FILE = CONFIG_DIR / "bootstrapper.log"
+APP_NAME = "Autoclicker Ultimate"
+APP_VERSION = "1.0.0"
+APP_DESCRIPTION = "Advanced Autoclicker with Recording, Macros & License System"
 
-# ============== LOGGING ==============
+# Colors (Fixed: removed RGBA, only use hex colors)
+PRIMARY_COLOR = "#0078d4"
+PRIMARY_DARK = "#005a9e"
+SUCCESS_COLOR = "#4caf50"
+SUCCESS_DARK = "#388e3c"
+DANGER_COLOR = "#f44336"
+DANGER_DARK = "#d32f2f"
+WARNING_COLOR = "#ff9800"
+WARNING_DARK = "#f57c00"
+BACKGROUND = "#f5f5f5"
+DARK_BG = "#1e1e1e"
+TEXT_COLOR = "#333333"
+TEXT_LIGHT = "#666666"
+TEXT_LIGHTER = "#999999"
+WHITE_SEMI_TRANSPARENT = "#e6e6e6"
+
+# Paths
+BASE_DIR = Path(__file__).parent.absolute()
+INSTALL_DIR = BASE_DIR / "Autoclicker_Ultimate"
+VENV_DIR = INSTALL_DIR / "venv"
+CONFIG_DIR = INSTALL_DIR / "config"
+BACKUP_DIR = INSTALL_DIR / "backups"
+LOG_FILE = BASE_DIR / "installer.log"
+
+# Dependencies
+DEPENDENCIES = [
+    "pynput>=1.7.6",
+    "Pillow>=9.0.0",
+    "pystray>=0.19.0",
+    "psutil>=5.9.0"
+]
+
+# ============== LOGGER ==============
 class Logger:
     def __init__(self, log_file: Path):
         self.log_file = log_file
-        self.log_file.parent.mkdir(parents=True, exist_ok=True)
         
     def log(self, message: str, level: str = "INFO"):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"[{timestamp}] [{level}] {message}\n"
-        print(log_entry.strip())
+        log_entry = f"[{timestamp}] [{level}] {message}"
+        print(f"[{level}] {message}")
         with open(self.log_file, 'a', encoding='utf-8') as f:
-            f.write(log_entry)
+            f.write(log_entry + "\n")
             
     def error(self, message: str):
         self.log(message, "ERROR")
@@ -56,409 +76,173 @@ class Logger:
 
 logger = Logger(LOG_FILE)
 
-# ============== SYSTEM CHECKS ==============
-class SystemChecker:
-    @staticmethod
-    def check_python_version():
-        """Check Python version compatibility"""
-        version = sys.version_info
-        if version.major < 3 or (version.major == 3 and version.minor < 6):
-            return False, f"Python 3.6+ required (you have {version.major}.{version.minor}.{version.micro})"
-        return True, "Python version OK"
+# ============== SIMPLE INSTALLER ==============
+class SimpleInstaller:
+    def __init__(self):
+        self.install_steps = [
+            ("Checking system requirements", 5, self.check_system),
+            ("Creating directories", 5, self.create_dirs),
+            ("Setting up virtual environment", 15, self.setup_venv),
+            ("Installing dependencies", 25, self.install_deps),
+            ("Copying application files", 15, self.copy_files),
+            ("Creating launchers", 15, self.create_launchers),
+            ("Creating uninstaller", 5, self.create_uninstaller),
+            ("Finalizing installation", 5, self.finalize),
+        ]
+        self.installation_successful = False
     
-    @staticmethod
-    def check_os():
-        """Check operating system compatibility"""
-        system = platform.system()
-        if system == "Windows":
-            return True, f"Windows {platform.release()}"
-        elif system == "Linux":
-            return True, f"Linux {platform.release()}"
-        elif system == "Darwin":
-            return True, f"macOS {platform.mac_ver()[0]}"
-        else:
-            return False, f"Unsupported OS: {system}"
-    
-    @staticmethod
-    def check_dependencies():
-        """Check required dependencies"""
-        missing = []
+    def check_system(self):
+        """Check system requirements"""
+        if sys.version_info < (3, 6):
+            raise Exception("Python 3.6+ required")
+        
         try:
             import tkinter
         except ImportError:
-            missing.append("tkinter")
-            
-        try:
-            import PIL
-        except ImportError:
-            missing.append("Pillow")
-            
-        return missing
-    
-    @staticmethod
-    def get_system_info():
-        """Get comprehensive system information"""
-        info = {
-            "platform": platform.platform(),
-            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            "architecture": platform.architecture()[0],
-            "processor": platform.processor(),
-            "install_dir": str(INSTALL_DIR),
-            "config_dir": str(CONFIG_DIR),
-            "available_disk": shutil.disk_usage(INSTALL_DIR).free // (1024**3) if INSTALL_DIR.exists() else 0
-        }
-        return info
-
-# ============== UPDATE SYSTEM ==============
-class Updater:
-    def __init__(self):
-        self.current_version = APP_VERSION
-        self.update_url = f"{REPO_URL}/releases/latest"
-        self.manifest_url = f"{RELEASE_URL}/manifest.json"
+            raise Exception("tkinter not installed")
         
-    def check_for_updates(self) -> Dict:
-        """Check for available updates"""
-        try:
-            # Try to get latest release info
-            with urllib.request.urlopen(self.update_url, timeout=10) as response:
-                import json
-                import re
-                html = response.read().decode('utf-8')
-                
-                # Try to extract version from release page
-                version_pattern = r'releases/tag/v?([\d\.]+)'
-                matches = re.findall(version_pattern, html)
-                if matches:
-                    latest_version = matches[0]
-                    return {
-                        "available": latest_version != self.current_version,
-                        "latest_version": latest_version,
-                        "current_version": self.current_version,
-                        "url": f"{RELEASE_URL}/autoclicker-ultimate-v{latest_version}.zip"
-                    }
-        except Exception as e:
-            logger.error(f"Failed to check updates: {e}")
-            
-        # Fallback: check manifest
-        try:
-            with urllib.request.urlopen(self.manifest_url, timeout=10) as response:
-                manifest = json.loads(response.read())
-                return {
-                    "available": manifest.get("version", "0.0.0") != self.current_version,
-                    "latest_version": manifest.get("version", "0.0.0"),
-                    "current_version": self.current_version,
-                    "changelog": manifest.get("changelog", []),
-                    "url": manifest.get("download_url", "")
-                }
-        except Exception as e:
-            logger.error(f"Failed to get manifest: {e}")
-            
-        return {"available": False, "error": "Cannot check updates"}
+        free_gb = shutil.disk_usage(BASE_DIR).free // (1024**3)
+        if free_gb < 1:
+            raise Exception(f"Low disk space: {free_gb}GB free (need at least 1GB)")
     
-    def download_update(self, url: str, progress_callback=None) -> Optional[Path]:
-        """Download update package"""
-        try:
-            temp_dir = Path(tempfile.mkdtemp())
-            download_path = temp_dir / "update.zip"
-            
-            logger.info(f"Downloading update from {url}")
-            
-            with urllib.request.urlopen(url) as response:
-                total_size = int(response.headers.get('content-length', 0))
-                downloaded = 0
-                block_size = 8192
-                
-                with open(download_path, 'wb') as f:
-                    while True:
-                        buffer = response.read(block_size)
-                        if not buffer:
-                            break
-                        f.write(buffer)
-                        downloaded += len(buffer)
-                        if progress_callback and total_size > 0:
-                            progress = (downloaded / total_size) * 100
-                            progress_callback(progress)
-                            
-            logger.info(f"Update downloaded: {download_path}")
-            return download_path
-            
-        except Exception as e:
-            logger.error(f"Download failed: {e}")
-            return None
+    def create_dirs(self):
+        """Create necessary directories"""
+        for directory in [INSTALL_DIR, CONFIG_DIR, BACKUP_DIR]:
+            directory.mkdir(parents=True, exist_ok=True)
     
-    def verify_update(self, update_path: Path, expected_hash: str = None) -> bool:
-        """Verify update integrity"""
-        try:
-            if expected_hash:
-                # Calculate file hash
-                sha256 = hashlib.sha256()
-                with open(update_path, 'rb') as f:
-                    for chunk in iter(lambda: f.read(4096), b''):
-                        sha256.update(chunk)
-                actual_hash = sha256.hexdigest()
-                
-                if actual_hash != expected_hash:
-                    logger.error(f"Hash mismatch: {actual_hash} != {expected_hash}")
-                    return False
-                    
-            # Verify archive integrity
-            if update_path.suffix == '.zip':
-                with zipfile.ZipFile(update_path, 'r') as zipf:
-                    if zipf.testzip() is not None:
-                        return False
-            elif update_path.suffix in ['.tar', '.tar.gz', '.tgz']:
-                with tarfile.open(update_path, 'r:*') as tarf:
-                    # Just try to read members
-                    tarf.getmembers()
-                    
-            return True
-            
-        except Exception as e:
-            logger.error(f"Verification failed: {e}")
-            return False
-    
-    def apply_update(self, update_path: Path, rollback_on_error: bool = True) -> bool:
-        """Apply the downloaded update"""
-        logger.info(f"Applying update from {update_path}")
+    def setup_venv(self):
+        """Setup Python virtual environment"""
+        if VENV_DIR.exists():
+            shutil.rmtree(VENV_DIR)
         
-        # Create backup
-        backup_path = None
-        if rollback_on_error and INSTALL_DIR.exists():
-            backup_path = self._create_backup()
-            if not backup_path:
-                logger.error("Failed to create backup!")
-                return False
+        result = subprocess.run(
+            [sys.executable, "-m", "venv", str(VENV_DIR), "--copies"],
+            capture_output=True,
+            text=True
+        )
         
-        try:
-            # Extract update
-            temp_extract = Path(tempfile.mkdtemp())
-            
-            if update_path.suffix == '.zip':
-                with zipfile.ZipFile(update_path, 'r') as zipf:
-                    zipf.extractall(temp_extract)
-            elif update_path.suffix in ['.tar', '.tar.gz', '.tgz']:
-                with tarfile.open(update_path, 'r:*') as tarf:
-                    tarf.extractall(temp_extract)
-            else:
-                logger.error(f"Unsupported archive format: {update_path.suffix}")
-                return False
-            
-            # Stop any running instances
-            self._stop_running_instances()
-            
-            # Remove old installation (keep configs)
-            if INSTALL_DIR.exists():
-                # Keep important files
-                keep_files = ['config.json', 'profiles.json', 'macros.json', 'license.json']
-                for file in keep_files:
-                    config_file = INSTALL_DIR / file
-                    if config_file.exists():
-                        shutil.copy2(config_file, CONFIG_DIR / file)
-                
-                shutil.rmtree(INSTALL_DIR)
-            
-            # Copy new files
-            extracted_app = None
-            for item in temp_extract.iterdir():
-                if item.is_dir() and 'autoclicker' in item.name.lower():
-                    extracted_app = item
-                    break
-            
-            if extracted_app:
-                shutil.copytree(extracted_app, INSTALL_DIR)
-            else:
-                # If no clear app dir, copy everything
-                for item in temp_extract.iterdir():
-                    dest = INSTALL_DIR / item.name
-                    if item.is_dir():
-                        shutil.copytree(item, dest)
-                    else:
-                        shutil.copy2(item, dest)
-            
-            # Restore configs
-            for file in ['config.json', 'profiles.json', 'macros.json', 'license.json']:
-                config_file = CONFIG_DIR / file
-                if config_file.exists():
-                    shutil.copy2(config_file, INSTALL_DIR / file)
-            
-            # Update version
-            version_file = INSTALL_DIR / "version.txt"
-            with open(version_file, 'w') as f:
-                f.write(self.current_version)
-            
-            # Cleanup
-            shutil.rmtree(temp_extract)
-            update_path.unlink()
-            
-            logger.info("Update applied successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Update failed: {e}")
-            
-            # Rollback if enabled
-            if rollback_on_error and backup_path:
-                logger.info("Rolling back to previous version...")
-                self._restore_backup(backup_path)
-                
-            return False
-    
-    def _create_backup(self) -> Optional[Path]:
-        """Create backup of current installation"""
-        try:
-            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = BACKUP_DIR / f"backup_{timestamp}.zip"
-            
-            with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(INSTALL_DIR):
-                    for file in files:
-                        file_path = Path(root) / file
-                        arcname = file_path.relative_to(INSTALL_DIR)
-                        zipf.write(file_path, arcname)
-            
-            # Keep only last 5 backups
-            backups = sorted(BACKUP_DIR.glob("backup_*.zip"))
-            for old_backup in backups[:-5]:
-                old_backup.unlink()
-                
-            return backup_path
-            
-        except Exception as e:
-            logger.error(f"Backup failed: {e}")
-            return None
-    
-    def _restore_backup(self, backup_path: Path) -> bool:
-        """Restore from backup"""
-        try:
-            if INSTALL_DIR.exists():
-                shutil.rmtree(INSTALL_DIR)
-            
-            INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-            
-            with zipfile.ZipFile(backup_path, 'r') as zipf:
-                zipf.extractall(INSTALL_DIR)
-            
-            logger.info(f"Restored from backup: {backup_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Restore failed: {e}")
-            return False
-    
-    def _stop_running_instances(self):
-        """Stop any running instances of the app"""
-        try:
-            import psutil
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    cmdline = proc.info.get('cmdline', [])
-                    if cmdline and 'autoclicker.py' in ' '.join(cmdline):
-                        proc.terminate()
-                        proc.wait(timeout=5)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-        except ImportError:
-            # psutil not available, try basic method
-            pass
-
-# ============== INSTALLATION SYSTEM ==============
-class Installer:
-    def __init__(self):
-        self.dependencies = [
-            "pynput>=1.7.6",
-            "Pillow>=9.0.0",
-            "pystray>=0.19.0",  # Optional but recommended
-        ]
+        if result.returncode != 0:
+            raise Exception(f"Failed to create virtual environment: {result.stderr}")
         
-    def check_installation(self) -> bool:
-        """Check if application is properly installed"""
-        required_files = [
-            INSTALL_DIR / "autoclicker.py",
-            INSTALL_DIR / "requirements.txt",
-        ]
-        
-        return all(f.exists() for f in required_files)
+        if platform.system() == "Windows":
+            self.python_exe = VENV_DIR / "Scripts" / "python.exe"
+            self.pip_exe = VENV_DIR / "Scripts" / "pip.exe"
+        else:
+            self.python_exe = VENV_DIR / "bin" / "python"
+            self.pip_exe = VENV_DIR / "bin" / "pip"
     
-    def install_dependencies(self, progress_callback=None) -> bool:
+    def install_deps(self):
         """Install Python dependencies"""
-        logger.info("Installing dependencies...")
+        # First upgrade pip
+        pip_upgrade_result = subprocess.run(
+            [str(self.pip_exe), "install", "--upgrade", "pip"],
+            capture_output=True,
+            text=True
+        )
         
-        for i, dep in enumerate(self.dependencies):
-            try:
-                if progress_callback:
-                    progress_callback((i / len(self.dependencies)) * 100, f"Installing {dep}")
-                
-                subprocess.check_call([
-                    sys.executable, "-m", "pip", "install", "--upgrade", dep
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
-                logger.info(f"Installed: {dep}")
-                
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Failed to install {dep}: {e}")
-                return False
+        if pip_upgrade_result.returncode != 0:
+            # Try without upgrade if upgrade fails
+            logger.warn(f"Pip upgrade failed: {pip_upgrade_result.stderr}")
         
-        if progress_callback:
-            progress_callback(100, "Dependencies installed")
+        # Install each dependency
+        for dep in DEPENDENCIES:
+            result = subprocess.run(
+                [str(self.pip_exe), "install", dep],
+                capture_output=True,
+                text=True
+            )
             
-        return True
+            if result.returncode != 0:
+                raise Exception(f"Failed to install {dep}: {result.stderr}")
     
-    def setup_environment(self) -> bool:
-        """Setup application environment"""
+    def copy_files(self):
+        """Copy application files"""
+        files_to_copy = []
+        
+        for filename in ["autoclicker.py", "key_manager.py", "README.md", "LICENSE"]:
+            src = BASE_DIR / filename
+            if src.exists():
+                files_to_copy.append(src)
+        
+        if not files_to_copy:
+            raise Exception("No application files found!")
+        
+        for src in files_to_copy:
+            shutil.copy2(src, INSTALL_DIR / src.name)
+        
+        # Create requirements.txt
+        with open(INSTALL_DIR / "requirements.txt", 'w') as f:
+            f.write("\n".join(DEPENDENCIES))
+        
+        # Create config file
+        config = {
+            "app_name": APP_NAME,
+            "version": APP_VERSION,
+            "installed_at": datetime.now().isoformat(),
+            "install_dir": str(INSTALL_DIR),
+            "portable": True
+        }
+        
+        with open(INSTALL_DIR / "config.json", 'w') as f:
+            json.dump(config, f, indent=2)
+    
+    def create_launchers(self):
+        """Create launcher scripts"""
+        # Use safe ASCII characters for batch files
+        bat_content = f"""@echo off
+chcp 65001 >nul
+echo ============================================
+echo        AUTOCLICKER ULTIMATE
+echo ============================================
+echo.
+echo Starting {APP_NAME}...
+cd /d "{INSTALL_DIR}"
+"{self.python_exe}" autoclicker.py
+pause
+"""
+        
         try:
-            # Create directories
-            INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-            
-            # Create desktop shortcut (Windows)
-            if platform.system() == "Windows":
-                self._create_windows_shortcut()
-            
-            # Create launcher script
-            self._create_launcher_script()
-            
-            # Create uninstaller
-            self._create_uninstaller()
-            
-            logger.info("Environment setup complete")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Environment setup failed: {e}")
-            return False
-    
-    def _create_windows_shortcut(self):
-        """Create Windows desktop shortcut"""
+            bat_path = BASE_DIR / "run.bat"
+            with open(bat_path, 'w', encoding='utf-8') as f:
+                f.write(bat_content)
+        except UnicodeEncodeError:
+            # Fallback to ASCII only
+            bat_content_ascii = f"""@echo off
+echo ============================================
+echo        AUTOCLICKER ULTIMATE
+echo ============================================
+echo.
+echo Starting {APP_NAME}...
+cd /d "{INSTALL_DIR}"
+"{self.python_exe}" autoclicker.py
+pause
+"""
+            with open(bat_path, 'w', encoding='ascii', errors='ignore') as f:
+                f.write(bat_content_ascii)
+        
+        # Desktop shortcut for Windows
+        desktop_bat = BASE_DIR / f"Start_{APP_NAME.replace(' ', '_')}.bat"
         try:
-            import winshell
-            from win32com.client import Dispatch
-            
-            desktop = winshell.desktop()
-            shortcut_path = os.path.join(desktop, f"{APP_NAME}.lnk")
-            
-            target = str(Path(sys.executable).parent / "pythonw.exe")
-            wDir = str(INSTALL_DIR)
-            icon = str(INSTALL_DIR / "icon.ico") if (INSTALL_DIR / "icon.ico").exists() else None
-            
-            shell = Dispatch('WScript.Shell')
-            shortcut = shell.CreateShortCut(shortcut_path)
-            shortcut.Targetpath = target
-            shortcut.Arguments = f'"{INSTALL_DIR / "autoclicker.py"}"'
-            shortcut.WorkingDirectory = wDir
-            if icon:
-                shortcut.IconLocation = icon
-            shortcut.save()
-            
-            logger.info(f"Created desktop shortcut: {shortcut_path}")
-            
-        except Exception as e:
-            logger.warn(f"Could not create Windows shortcut: {e}")
-    
-    def _create_launcher_script(self):
-        """Create launcher script"""
-        launcher_content = f'''#!/usr/bin/env python3
+            with open(desktop_bat, 'w', encoding='utf-8') as f:
+                f.write(bat_content)
+        except UnicodeEncodeError:
+            with open(desktop_bat, 'w', encoding='ascii', errors='ignore') as f:
+                f.write(bat_content)
+        
+        # Linux/Mac shell script - no fancy characters needed
+        sh_content = f"""#!/bin/bash
+cd "{INSTALL_DIR}"
+"{self.python_exe}" autoclicker.py
+"""
+        sh_path = BASE_DIR / "run.sh"
+        with open(sh_path, 'w') as f:
+            f.write(sh_content)
+        
+        if platform.system() != "Windows":
+            os.chmod(sh_path, 0o755)
+        
+        # Python launcher (cross-platform)
+        py_content = f'''#!/usr/bin/env python3
 """
 {APP_NAME} Launcher
 """
@@ -466,28 +250,36 @@ import os
 import sys
 import subprocess
 
-app_dir = r"{INSTALL_DIR}"
-script_path = os.path.join(app_dir, "autoclicker.py")
-
-if not os.path.exists(script_path):
-    print("Error: Application not found!")
-    print(f"Expected at: {{script_path}}")
-    sys.exit(1)
-
-os.chdir(app_dir)
-subprocess.Popen([sys.executable, script_path])
-'''
-        
-        launcher_path = CONFIG_DIR / "launcher.py"
-        with open(launcher_path, 'w') as f:
-            f.write(launcher_content)
-        
-        # Make executable on Unix
-        if platform.system() != "Windows":
-            os.chmod(launcher_path, 0o755)
+def main():
+    print("Starting {APP_NAME}...")
+    print(f"Version: {APP_VERSION}")
+    print()
     
-    def _create_uninstaller(self):
+    # Change to install directory
+    os.chdir(r"{INSTALL_DIR}")
+    
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen([r"{self.python_exe}", "autoclicker.py"], 
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            subprocess.Popen([r"{self.python_exe}", "autoclicker.py"])
+        
+        print("SUCCESS: Application started!")
+    except Exception as e:
+        print(f"ERROR: {{e}}")
+        input("Press Enter to exit...")
+
+if __name__ == "__main__":
+    main()
+'''
+        py_path = BASE_DIR / "run.py"
+        with open(py_path, 'w', encoding='utf-8') as f:
+            f.write(py_content)
+    
+    def create_uninstaller(self):
         """Create uninstaller script"""
+        # FIXED: Using double curly braces to escape in f-string
         uninstaller_content = f'''#!/usr/bin/env python3
 """
 {APP_NAME} Uninstaller
@@ -495,1005 +287,674 @@ subprocess.Popen([sys.executable, script_path])
 import os
 import sys
 import shutil
-import subprocess
 from pathlib import Path
 
 def main():
-    print("=== {APP_NAME} Uninstaller ===")
-    print("This will remove the application and all its data.")
+    print("=" * 50)
+    print(f"{APP_NAME} - Uninstaller")
+    print("=" * 50)
+    print()
+    
+    install_dir = Path(r"{INSTALL_DIR}")
+    base_dir = Path(__file__).parent
+    
+    if not install_dir.exists():
+        print("ERROR: Application is not installed.")
+        return
+    
+    print(f"This will remove:")
+    print(f"  • {{install_dir}}")
+    print(f"  • Launcher files")
+    print()
     
     response = input("Are you sure? (y/N): ").strip().lower()
     if response != 'y':
         print("Uninstall cancelled.")
         return
     
-    # Remove installation
-    install_dir = Path(r"{INSTALL_DIR}")
-    config_dir = Path(r"{CONFIG_DIR}")
+    print()
+    print("Removing application...")
     
+    # Remove installation directory
     if install_dir.exists():
         shutil.rmtree(install_dir, ignore_errors=True)
-        print(f"Removed installation: {{install_dir}}")
+        print(f"Removed: {{install_dir}}")
     
-    # Remove configs (optional)
-    response = input("Remove all settings and configurations? (y/N): ").strip().lower()
-    if response == 'y':
-        if config_dir.exists():
-            shutil.rmtree(config_dir, ignore_errors=True)
-            print(f"Removed configurations: {{config_dir}}")
+    # Remove launchers
+    launchers = ["run.bat", "run.sh", "run.py", f"Start_{APP_NAME.replace(' ', '_')}.bat"]
+    for launcher in launchers:
+        launcher_path = base_dir / launcher
+        if launcher_path.exists():
+            launcher_path.unlink()
+            print(f"Removed: {{launcher}}")
     
-    # Remove desktop shortcut (Windows)
-    if sys.platform == "win32":
-        try:
-            import winshell
-            shortcut = os.path.join(winshell.desktop(), "{APP_NAME}.lnk")
-            if os.path.exists(shortcut):
-                os.remove(shortcut)
-                print("Removed desktop shortcut")
-        except:
-            pass
-    
-    print("\\nUninstall complete!")
+    print()
+    print("SUCCESS: Uninstall complete!")
+    print("Note: Your settings are preserved in the config folder.")
+    print()
     input("Press Enter to exit...")
 
 if __name__ == "__main__":
     main()
 '''
         
-        uninstaller_path = CONFIG_DIR / "uninstaller.py"
-        with open(uninstaller_path, 'w') as f:
+        uninstaller_path = BASE_DIR / "uninstall.py"
+        with open(uninstaller_path, 'w', encoding='utf-8') as f:
             f.write(uninstaller_content)
         
-        if platform.system() != "Windows":
-            os.chmod(uninstaller_path, 0o755)
+        # Windows uninstaller batch
+        if platform.system() == "Windows":
+            uninstaller_bat = BASE_DIR / "uninstall.bat"
+            uninstaller_bat_content = f"""@echo off
+echo Uninstalling {APP_NAME}...
+echo.
+python "{uninstaller_path}"
+pause
+"""
+            try:
+                with open(uninstaller_bat, 'w', encoding='utf-8') as f:
+                    f.write(uninstaller_bat_content)
+            except UnicodeEncodeError:
+                with open(uninstaller_bat, 'w', encoding='ascii', errors='ignore') as f:
+                    f.write(uninstaller_bat_content)
+    
+    def finalize(self):
+        """Finalize installation"""
+        version_file = INSTALL_DIR / "version.txt"
+        with open(version_file, 'w') as f:
+            f.write(f"{APP_NAME} v{APP_VERSION}\n")
+            f.write(f"Installed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Portable: Yes\n")
+            f.write(f"Python: {sys.version}\n")
+        
+        self.installation_successful = True
+    
+    def is_installed(self):
+        """Check if already installed"""
+        return (INSTALL_DIR / "autoclicker.py").exists()
+    
+    def install(self, progress_callback=None, log_callback=None):
+        """Run complete installation"""
+        total_weight = sum(weight for _, weight, _ in self.install_steps)
+        completed = 0
+        
+        try:
+            for name, weight, func in self.install_steps:
+                if log_callback:
+                    log_callback(f"Starting: {name}")
+                
+                try:
+                    func()
+                    completed += weight
+                    progress = (completed / total_weight) * 100
+                    
+                    if progress_callback:
+                        progress_callback(progress, f"✓ {name}")
+                    if log_callback:
+                        log_callback(f"Completed: {name}")
+                        
+                except Exception as e:
+                    if log_callback:
+                        log_callback(f"Failed: {name} - {str(e)}")
+                    raise
+            
+            return True
+        except Exception as e:
+            logger.error(f"Installation failed: {str(e)}")
+            return False
 
-# ============== GUI FOR BOOTSTRAPPER ==============
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-import threading
-
-class BootstrapGUI:
+# ============== SIMPLE GUI ==============
+class SimpleInstallerGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title(f"{APP_NAME} - Installer")
-        self.root.geometry("600x500")
+        self.root.geometry("800x600")
         self.root.resizable(False, False)
+        self.root.configure(bg=BACKGROUND)
         
         # Center window
-        self.root.eval('tk::PlaceWindow . center')
+        self.center_window()
         
-        # Variables
-        self.installer = Installer()
-        self.updater = Updater()
-        self.system_checker = SystemChecker()
-        
+        self.installer = SimpleInstaller()
         self.setup_ui()
-        
+    
+    def center_window(self):
+        """Center the window on screen"""
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
     def setup_ui(self):
+        """Setup the user interface"""
         # Header
-        header = tk.Frame(self.root, bg='#0078d4', height=60)
+        header = tk.Frame(self.root, bg=PRIMARY_COLOR, height=80)
         header.pack(fill='x')
         header.pack_propagate(False)
         
-        tk.Label(
-            header, text=f"⚡ {APP_NAME}",
-            font=('Segoe UI', 16, 'bold'),
-            fg='#ffffff', bg='#0078d4'
-        ).pack(pady=15)
-        
-        # Notebook
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill='both', expand=True, padx=20, pady=10)
-        
-        # Create tabs
-        self.create_welcome_tab()
-        self.create_install_tab()
-        self.create_update_tab()
-        self.create_system_tab()
-        self.create_logs_tab()
-        
-        # Status bar
-        self.status_var = tk.StringVar(value="Ready")
-        status_bar = tk.Label(self.root, textvariable=self.status_var, 
-                            relief='sunken', anchor='w', padx=10)
-        status_bar.pack(fill='x', side='bottom')
-        
-    def create_welcome_tab(self):
-        tab = tk.Frame(self.notebook, bg='white')
-        self.notebook.add(tab, text=" Welcome ")
-        
-        content = tk.Frame(tab, bg='white', padx=30, pady=30)
-        content.pack(fill='both', expand=True)
+        # App title
+        title_frame = tk.Frame(header, bg=PRIMARY_COLOR)
+        title_frame.pack(expand=True, fill='both', padx=40, pady=20)
         
         tk.Label(
-            content, text=f"Welcome to {APP_NAME}!",
+            title_frame, 
+            text=f"{APP_NAME}",
             font=('Segoe UI', 20, 'bold'),
-            fg='#0078d4', bg='white'
-        ).pack(pady=10)
+            fg='white',
+            bg=PRIMARY_COLOR
+        ).pack(side='left')
         
         tk.Label(
-            content, text="The ultimate autoclicker with advanced features",
-            font=('Segoe UI', 12),
-            fg='#666666', bg='white'
-        ).pack(pady=5)
+            title_frame,
+            text=f"v{APP_VERSION}",
+            font=('Segoe UI', 10),
+            fg=WHITE_SEMI_TRANSPARENT,
+            bg=PRIMARY_COLOR
+        ).pack(side='right')
         
-        features = [
-            "✓ Advanced autoclicking with multiple modes",
-            "✓ Mouse movement recording & playback",
-            "✓ Keyboard macro system",
-            "✓ Customizable hotkeys",
-            "✓ System tray integration",
-            "✓ License key system"
-        ]
+        # Main content area
+        self.content_frame = tk.Frame(self.root, bg=BACKGROUND)
+        self.content_frame.pack(fill='both', expand=True, padx=30, pady=30)
         
-        for feature in features:
-            tk.Label(
-                content, text=feature,
-                font=('Segoe UI', 10),
-                fg='#333333', bg='white',
-                anchor='w'
-            ).pack(fill='x', pady=2)
-        
-        # Check if installed
-        if self.installer.check_installation():
-            tk.Label(
-                content, text="✓ Application is installed and ready!",
-                font=('Segoe UI', 11, 'bold'),
-                fg='#4ec959', bg='white'
-            ).pack(pady=20)
-            
-            tk.Button(
-                content, text="🚀 Launch Application", 
-                command=self.launch_app,
-                font=('Segoe UI', 12, 'bold'),
-                bg='#0078d4', fg='white',
-                padx=20, pady=10,
-                cursor='hand2'
-            ).pack(pady=10)
-        else:
-            tk.Label(
-                content, text="⚠ Application not installed",
-                font=('Segoe UI', 11, 'bold'),
-                fg='#f9a825', bg='white'
-            ).pack(pady=20)
-            
-            tk.Button(
-                content, text="🔧 Go to Installation", 
-                command=lambda: self.notebook.select(1),
-                font=('Segoe UI', 12),
-                bg='#f9a825', fg='white',
-                padx=20, pady=10,
-                cursor='hand2'
-            ).pack(pady=10)
+        self.show_welcome_screen()
     
-    def create_install_tab(self):
-        tab = tk.Frame(self.notebook, bg='#f0f0f0')
-        self.notebook.add(tab, text=" Installation ")
+    def show_welcome_screen(self):
+        """Show welcome screen with install button"""
+        # Clear content frame
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
         
-        content = tk.Frame(tab, bg='#f0f0f0', padx=20, pady=20)
-        content.pack(fill='both', expand=True)
+        # Welcome message
+        tk.Label(
+            self.content_frame,
+            text="Welcome to Autoclicker Ultimate!",
+            font=('Segoe UI', 18, 'bold'),
+            bg=BACKGROUND,
+            fg=TEXT_COLOR
+        ).pack(pady=(0, 10))
         
-        # System check results
-        check_frame = tk.LabelFrame(content, text="System Check", 
-                                   font=('Segoe UI', 11, 'bold'),
-                                   bg='#f0f0f0', padx=10, pady=10)
-        check_frame.pack(fill='x', pady=(0, 15))
+        tk.Label(
+            self.content_frame,
+            text=APP_DESCRIPTION,
+            font=('Segoe UI', 11),
+            bg=BACKGROUND,
+            fg=TEXT_LIGHT,
+            wraplength=600
+        ).pack(pady=(0, 30))
         
-        # Python version
-        py_ok, py_msg = self.system_checker.check_python_version()
-        py_color = '#4ec959' if py_ok else '#f44336'
-        tk.Label(check_frame, text=f"Python: {py_msg}", 
-                font=('Segoe UI', 10), fg=py_color, bg='#f0f0f0').pack(anchor='w')
+        # Installation folder info
+        folder_frame = tk.Frame(self.content_frame, bg='white', relief='solid', bd=1)
+        folder_frame.pack(fill='x', pady=(0, 30), padx=50)
         
-        # OS
-        os_ok, os_msg = self.system_checker.check_os()
-        os_color = '#4ec959' if os_ok else '#f44336'
-        tk.Label(check_frame, text=f"OS: {os_msg}", 
-                font=('Segoe UI', 10), fg=os_color, bg='#f0f0f0').pack(anchor='w')
+        tk.Label(
+            folder_frame,
+            text="Installation Folder:",
+            font=('Segoe UI', 10, 'bold'),
+            bg='white',
+            fg=TEXT_COLOR
+        ).pack(anchor='w', padx=15, pady=(15, 5))
         
-        # Dependencies
-        missing_deps = self.system_checker.check_dependencies()
-        if missing_deps:
-            tk.Label(check_frame, text=f"Missing: {', '.join(missing_deps)}", 
-                    font=('Segoe UI', 10), fg='#f9a825', bg='#f0f0f0').pack(anchor='w')
+        tk.Label(
+            folder_frame,
+            text=str(INSTALL_DIR),
+            font=('Consolas', 9),
+            bg='white',
+            fg=PRIMARY_COLOR,
+            wraplength=500
+        ).pack(anchor='w', padx=15, pady=(0, 15))
+        
+        # Check installation status
+        if self.installer.is_installed():
+            status_icon = ""
+            status_text = "Already Installed"
+            status_color = SUCCESS_COLOR
+            button_text = "Reinstall Application"
+            show_launch = True
         else:
-            tk.Label(check_frame, text="Dependencies: All available", 
-                    font=('Segoe UI', 10), fg='#4ec959', bg='#f0f0f0').pack(anchor='w')
+            status_icon = ""
+            status_text = "Ready to Install"
+            status_color = PRIMARY_COLOR
+            button_text = "Install Now"
+            show_launch = False
+        
+        # Status display
+        status_frame = tk.Frame(self.content_frame, bg=BACKGROUND)
+        status_frame.pack(pady=(0, 20))
+        
+        tk.Label(
+            status_frame,
+            text=status_icon,
+            font=('Segoe UI', 24),
+            bg=BACKGROUND,
+            fg=status_color
+        ).pack(side='left', padx=(0, 10))
+        
+        tk.Label(
+            status_frame,
+            text=status_text,
+            font=('Segoe UI', 14, 'bold'),
+            bg=BACKGROUND,
+            fg=status_color
+        ).pack(side='left')
+        
+        # Big install button
+        self.install_button = tk.Button(
+            self.content_frame,
+            text=button_text,
+            font=('Segoe UI', 14, 'bold'),
+            bg=PRIMARY_COLOR,
+            fg='white',
+            activebackground=PRIMARY_DARK,
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=40,
+            pady=15,
+            command=self.start_installation
+        )
+        self.install_button.pack(pady=(0, 20))
+        
+        # Secondary buttons
+        button_frame = tk.Frame(self.content_frame, bg=BACKGROUND)
+        button_frame.pack(pady=(0, 10))
+        
+        if show_launch:
+            launch_btn = tk.Button(
+                button_frame,
+                text="Launch Application",
+                font=('Segoe UI', 11, 'bold'),
+                bg=SUCCESS_COLOR,
+                fg='white',
+                activebackground=SUCCESS_DARK,
+                activeforeground='white',
+                relief='flat',
+                cursor='hand2',
+                padx=25,
+                pady=8,
+                command=self.launch_app
+            )
+            launch_btn.pack(side='left', padx=5)
+        
+        uninstall_btn = tk.Button(
+            button_frame,
+            text="Uninstall",
+            font=('Segoe UI', 11),
+            bg=DANGER_COLOR,
+            fg='white',
+            activebackground=DANGER_DARK,
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=25,
+            pady=8,
+            command=self.uninstall_app
+        )
+        uninstall_btn.pack(side='left', padx=5)
+        
+        exit_btn = tk.Button(
+            button_frame,
+            text="Exit",
+            font=('Segoe UI', 11),
+            bg=TEXT_LIGHTER,
+            fg='white',
+            activebackground=TEXT_LIGHT,
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=25,
+            pady=8,
+            command=self.root.destroy
+        )
+        exit_btn.pack(side='left', padx=5)
+        
+        # Footer note
+        tk.Label(
+            self.content_frame,
+            text="Note: This is a portable installation. You can move the entire folder anywhere.",
+            font=('Segoe UI', 9),
+            bg=BACKGROUND,
+            fg=TEXT_LIGHTER
+        ).pack(side='bottom', pady=(20, 0))
+    
+    def start_installation(self):
+        """Start installation process"""
+        # Show installation screen
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+        
+        # Installation title
+        tk.Label(
+            self.content_frame,
+            text="Installing Autoclicker Ultimate",
+            font=('Segoe UI', 18, 'bold'),
+            bg=BACKGROUND,
+            fg=TEXT_COLOR
+        ).pack(pady=(0, 10))
+        
+        tk.Label(
+            self.content_frame,
+            text="Please wait while we set up everything...",
+            font=('Segoe UI', 11),
+            bg=BACKGROUND,
+            fg=TEXT_LIGHT
+        ).pack(pady=(0, 30))
+        
+        # Progress container
+        progress_container = tk.Frame(self.content_frame, bg=BACKGROUND)
+        progress_container.pack(fill='x', pady=(0, 20), padx=50)
+        
+        # Progress percentage
+        self.progress_percent = tk.Label(
+            progress_container,
+            text="0%",
+            font=('Segoe UI', 28, 'bold'),
+            bg=BACKGROUND,
+            fg=PRIMARY_COLOR
+        )
+        self.progress_percent.pack()
         
         # Progress bar
-        self.progress_var = tk.DoubleVar()
-        progress_bar = ttk.Progressbar(content, variable=self.progress_var, maximum=100)
-        progress_bar.pack(fill='x', pady=10)
-        
-        self.progress_label = tk.Label(content, text="", bg='#f0f0f0')
-        self.progress_label.pack()
-        
-        # Install button
-        self.install_btn = tk.Button(
-            content, text="🚀 Install Application",
-            command=self.start_installation,
-            font=('Segoe UI', 12, 'bold'),
-            bg='#0078d4', fg='white',
-            padx=20, pady=10,
-            cursor='hand2'
+        self.progress_bar = ttk.Progressbar(
+            progress_container,
+            length=400,
+            mode='determinate'
         )
-        self.install_btn.pack(pady=20)
+        self.progress_bar.pack(fill='x', pady=(10, 5))
         
-        # Uninstall button (if installed)
-        if self.installer.check_installation():
-            tk.Button(
-                content, text="🗑️ Uninstall",
-                command=self.uninstall_app,
-                font=('Segoe UI', 10),
-                bg='#f44336', fg='white',
-                padx=10, pady=5,
-                cursor='hand2'
-            ).pack()
-    
-    def create_update_tab(self):
-        tab = tk.Frame(self.notebook, bg='#f0f0f0')
-        self.notebook.add(tab, text=" Updates ")
-        
-        content = tk.Frame(tab, bg='#f0f0f0', padx=20, pady=20)
-        content.pack(fill='both', expand=True)
-        
-        tk.Label(
-            content, text="Update Check",
-            font=('Segoe UI', 14, 'bold'),
-            bg='#f0f0f0'
-        ).pack(pady=(0, 10))
-        
-        self.update_status = tk.Label(
-            content, text="Checking for updates...",
-            font=('Segoe UI', 11),
-            bg='#f0f0f0'
+        # Status text
+        self.status_text = tk.Label(
+            progress_container,
+            text="Preparing installation...",
+            font=('Segoe UI', 10),
+            bg=BACKGROUND,
+            fg=TEXT_LIGHT
         )
-        self.update_status.pack(pady=10)
+        self.status_text.pack()
         
-        # Check for updates on load
-        self.root.after(100, self.check_updates)
+        # Log area
+        tk.Label(
+            self.content_frame,
+            text="Installation Log:",
+            font=('Segoe UI', 11, 'bold'),
+            bg=BACKGROUND,
+            fg=TEXT_COLOR
+        ).pack(anchor='w', pady=(20, 5), padx=50)
         
-        # Update progress
-        self.update_progress_var = tk.DoubleVar()
-        update_progress = ttk.Progressbar(content, variable=self.update_progress_var, maximum=100)
-        update_progress.pack(fill='x', pady=10)
+        log_container = tk.Frame(self.content_frame, bg='#cccccc')
+        log_container.pack(fill='both', expand=True, padx=50, pady=(0, 20))
         
-        self.update_progress_label = tk.Label(content, text="", bg='#f0f0f0')
-        self.update_progress_label.pack()
-        
-        # Update button
-        self.update_btn = tk.Button(
-            content, text="⬇️ Download Update",
-            command=self.download_update,
-            font=('Segoe UI', 11),
-            bg='#0078d4', fg='white',
-            state='disabled',
-            padx=15, pady=8,
-            cursor='hand2'
+        self.log_output = scrolledtext.ScrolledText(
+            log_container,
+            font=('Consolas', 9),
+            bg=DARK_BG,
+            fg='#cccccc',
+            height=8,
+            wrap='word'
         )
-        self.update_btn.pack(pady=10)
+        self.log_output.pack(fill='both', expand=True, padx=1, pady=1)
+        self.log_output.config(state='normal')
         
-        # Manual update button
-        tk.Button(
-            content, text="📁 Install from File",
-            command=self.manual_update,
-            font=('Segoe UI', 10),
-            bg='#9c27b0', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(pady=5)
+        # Start installation in background thread
+        threading.Thread(target=self.run_installation, daemon=True).start()
     
-    def create_system_tab(self):
-        tab = tk.Frame(self.notebook, bg='#f0f0f0')
-        self.notebook.add(tab, text=" System ")
-        
-        content = tk.Frame(tab, bg='#f0f0f0', padx=20, pady=20)
-        content.pack(fill='both', expand=True)
-        
-        tk.Label(
-            content, text="System Information",
-            font=('Segoe UI', 14, 'bold'),
-            bg='#f0f0f0'
-        ).pack(pady=(0, 15))
-        
-        # System info display
-        info_frame = tk.Frame(content, bg='#ffffff', relief='solid', borderwidth=1)
-        info_frame.pack(fill='both', expand=True)
-        
-        info_text = scrolledtext.ScrolledText(info_frame, height=15, 
-                                            font=('Consolas', 9))
-        info_text.pack(fill='both', expand=True, padx=5, pady=5)
-        
-        # Get system info
-        system_info = self.system_checker.get_system_info()
-        for key, value in system_info.items():
-            info_text.insert('end', f"{key}: {value}\n")
-        
-        info_text.config(state='disabled')
-        
-        # Action buttons
-        btn_frame = tk.Frame(content, bg='#f0f0f0')
-        btn_frame.pack(fill='x', pady=10)
-        
-        tk.Button(
-            btn_frame, text="📋 Copy Info",
-            command=lambda: self.copy_to_clipboard(str(system_info)),
-            font=('Segoe UI', 10),
-            bg='#607d8b', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            btn_frame, text="🗑️ Clear Cache",
-            command=self.clear_cache,
-            font=('Segoe UI', 10),
-            bg='#ff9800', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            btn_frame, text="🔄 Repair Installation",
-            command=self.repair_installation,
-            font=('Segoe UI', 10),
-            bg='#4caf50', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-    
-    def create_logs_tab(self):
-        tab = tk.Frame(self.notebook, bg='#f0f0f0')
-        self.notebook.add(tab, text=" Logs ")
-        
-        content = tk.Frame(tab, bg='#f0f0f0', padx=20, pady=20)
-        content.pack(fill='both', expand=True)
-        
-        tk.Label(
-            content, text="Application Logs",
-            font=('Segoe UI', 14, 'bold'),
-            bg='#f0f0f0'
-        ).pack(pady=(0, 10))
-        
-        # Log display
-        log_frame = tk.Frame(content, bg='#ffffff', relief='solid', borderwidth=1)
-        log_frame.pack(fill='both', expand=True)
-        
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=20, 
-                                                font=('Consolas', 9))
-        self.log_text.pack(fill='both', expand=True, padx=5, pady=5)
-        
-        # Load logs
-        self.load_logs()
-        
-        # Action buttons
-        btn_frame = tk.Frame(content, bg='#f0f0f0')
-        btn_frame.pack(fill='x', pady=10)
-        
-        tk.Button(
-            btn_frame, text="🔄 Refresh",
-            command=self.load_logs,
-            font=('Segoe UI', 10),
-            bg='#2196f3', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            btn_frame, text="🗑️ Clear Logs",
-            command=self.clear_logs,
-            font=('Segoe UI', 10),
-            bg='#f44336', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            btn_frame, text="📁 Open Log Folder",
-            command=lambda: self.open_folder(LOG_FILE.parent),
-            font=('Segoe UI', 10),
-            bg='#9c27b0', fg='white',
-            padx=10, pady=5,
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-    
-    # ============== ACTIONS ==============
-    def start_installation(self):
-        """Start the installation process"""
-        self.install_btn.config(state='disabled', text="Installing...")
-        self.status_var.set("Starting installation...")
-        
-        threading.Thread(target=self._install_thread, daemon=True).start()
-    
-    def _install_thread(self):
-        """Installation thread"""
+    def run_installation(self):
+        """Run installation in background thread"""
         try:
-            # Update progress
-            def update_progress(value, message):
-                self.progress_var.set(value)
-                self.progress_label.config(text=message)
-                self.status_var.set(message)
+            def update_progress(percent, message):
+                self.root.after(0, lambda: self.update_progress_ui(percent, message))
             
-            # Step 1: Setup environment
-            update_progress(10, "Setting up environment...")
-            if not self.installer.setup_environment():
-                messagebox.showerror("Error", "Failed to setup environment!")
-                return
+            def log_message(message):
+                self.root.after(0, lambda: self.add_log(message))
             
-            # Step 2: Install dependencies
-            update_progress(30, "Installing dependencies...")
-            if not self.installer.install_dependencies(update_progress):
-                messagebox.showerror("Error", "Failed to install dependencies!")
-                return
+            success = self.installer.install(update_progress, log_message)
             
-            # Step 3: Copy application files
-            update_progress(80, "Copying application files...")
-            
-            # Find and copy autoclicker.py
-            current_dir = Path(__file__).parent
-            source_files = [
-                "autoclicker.py",
-                "key_manager.py",
-                "requirements.txt",
-                "README.md",
-                "LICENSE"
-            ]
-            
-            for file in source_files:
-                src = current_dir / file
-                if src.exists():
-                    shutil.copy2(src, INSTALL_DIR / file)
-            
-            # Create default config
-            config = {
-                "version": APP_VERSION,
-                "installed_at": datetime.now().isoformat(),
-                "install_dir": str(INSTALL_DIR)
-            }
-            
-            with open(INSTALL_DIR / "config.json", 'w') as f:
-                json.dump(config, f, indent=2)
-            
-            update_progress(100, "Installation complete!")
-            
-            # Success message
-            self.root.after(0, lambda: messagebox.showinfo(
-                "Success", 
-                f"{APP_NAME} has been installed successfully!\n\n"
-                f"Location: {INSTALL_DIR}\n"
-                "You can now launch the application from the Welcome tab."
-            ))
-            
-            # Update UI
-            self.root.after(0, lambda: self.install_btn.config(
-                state='normal', text="✅ Installation Complete"
-            ))
-            
-            # Refresh welcome tab
-            self.root.after(0, lambda: self.notebook.forget(0))
-            self.root.after(0, self.create_welcome_tab)
+            if success:
+                # Installation successful
+                self.root.after(0, self.installation_complete)
+            else:
+                # Installation failed
+                error_msg = "Installation failed - check the log for details"
+                self.root.after(0, lambda: self.installation_failed(error_msg))
             
         except Exception as e:
-            logger.error(f"Installation failed: {e}")
-            self.root.after(0, lambda: messagebox.showerror(
-                "Error", f"Installation failed:\n{str(e)}"
-            ))
-            self.root.after(0, lambda: self.install_btn.config(
-                state='normal', text="🚀 Install Application"
-            ))
+            error_msg = f"Installation failed: {str(e)}"
+            logger.error(error_msg)
+            self.root.after(0, lambda: self.installation_failed(error_msg))
     
-    def check_updates(self):
-        """Check for available updates"""
-        self.update_status.config(text="Checking for updates...")
-        
-        def check():
-            try:
-                update_info = self.updater.check_for_updates()
-                
-                self.root.after(0, lambda: self._update_check_callback(update_info))
-                
-            except Exception as e:
-                logger.error(f"Update check failed: {e}")
-                self.root.after(0, lambda: self.update_status.config(
-                    text=f"Error checking updates: {str(e)}",
-                    fg='#f44336'
-                ))
-        
-        threading.Thread(target=check, daemon=True).start()
+    def update_progress_ui(self, percent, message):
+        """Update progress UI"""
+        self.progress_bar['value'] = percent
+        self.progress_percent.config(text=f"{int(percent)}%")
+        self.status_text.config(text=message)
+        self.add_log(message)
     
-    def _update_check_callback(self, update_info):
-        """Handle update check results"""
-        if update_info.get('available'):
-            self.update_status.config(
-                text=f"Update available: v{update_info['latest_version']}",
-                fg='#4ec959'
-            )
-            self.update_btn.config(state='normal')
-        else:
-            if update_info.get('error'):
-                self.update_status.config(
-                    text=f"Update check failed: {update_info['error']}",
-                    fg='#f44336'
-                )
-            else:
-                self.update_status.config(
-                    text=f"You have the latest version: v{APP_VERSION}",
-                    fg='#2196f3'
-                )
+    def add_log(self, message):
+        """Add message to log"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.log_output.insert('end', f"[{timestamp}] {message}\n")
+        self.log_output.see('end')
+        self.log_output.update()
     
-    def download_update(self):
-        """Download and apply update"""
-        update_info = self.updater.check_for_updates()
-        if not update_info.get('available'):
-            return
+    def installation_complete(self):
+        """Handle installation completion"""
+        self.progress_bar['value'] = 100
+        self.progress_percent.config(text="100%")
+        self.status_text.config(text="Installation complete!")
+        self.add_log("Installation completed successfully!")
+        self.add_log(f"Application installed in: {INSTALL_DIR}")
         
-        self.update_btn.config(state='disabled', text="Downloading...")
-        
-        def download():
-            def progress_callback(percent):
-                self.root.after(0, lambda: self.update_progress_var.set(percent))
-                self.root.after(0, lambda: self.update_progress_label.config(
-                    text=f"Downloading: {percent:.1f}%"
-                ))
-            
-            # Download update
-            update_path = self.updater.download_update(
-                update_info.get('url'), 
-                progress_callback
-            )
-            
-            if not update_path:
-                self.root.after(0, lambda: messagebox.showerror(
-                    "Error", "Failed to download update"
-                ))
-                self.root.after(0, lambda: self.update_btn.config(
-                    state='normal', text="⬇️ Download Update"
-                ))
-                return
-            
-            # Verify update
-            self.root.after(0, lambda: self.update_progress_label.config(
-                text="Verifying update..."
-            ))
-            
-            if not self.updater.verify_update(update_path):
-                self.root.after(0, lambda: messagebox.showerror(
-                    "Error", "Update verification failed"
-                ))
-                return
-            
-            # Apply update
-            self.root.after(0, lambda: self.update_progress_label.config(
-                text="Applying update..."
-            ))
-            
-            if self.updater.apply_update(update_path):
-                self.root.after(0, lambda: messagebox.showinfo(
-                    "Success", "Update applied successfully!"
-                ))
-                self.root.after(0, lambda: self.update_progress_label.config(
-                    text="Update complete!"
-                ))
-            else:
-                self.root.after(0, lambda: messagebox.showerror(
-                    "Error", "Failed to apply update"
-                ))
-            
-            self.root.after(0, lambda: self.update_btn.config(
-                state='normal', text="⬇️ Download Update"
-            ))
-            self.root.after(0, self.check_updates)
-        
-        threading.Thread(target=download, daemon=True).start()
-    
-    def manual_update(self):
-        """Install update from local file"""
-        from tkinter import filedialog
-        
-        file_path = filedialog.askopenfilename(
-            title="Select Update Package",
-            filetypes=[
-                ("ZIP files", "*.zip"),
-                ("All files", "*.*")
-            ]
+        # Add Continue button
+        continue_btn = tk.Button(
+            self.content_frame,
+            text="Continue",
+            font=('Segoe UI', 12, 'bold'),
+            bg=SUCCESS_COLOR,
+            fg='white',
+            activebackground=SUCCESS_DARK,
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=30,
+            pady=10,
+            command=self.show_welcome_screen
         )
+        continue_btn.pack(pady=10)
         
-        if not file_path:
-            return
+        # Show success message
+        self.root.after(1000, lambda: messagebox.showinfo(
+            "Installation Complete",
+            f"{APP_NAME} has been installed successfully!\n\n"
+            f"Location: {INSTALL_DIR}\n\n"
+            "You can now launch the application."
+        ))
+    
+    def installation_failed(self, error_msg):
+        """Handle installation failure"""
+        self.status_text.config(text="Installation failed!", fg=DANGER_COLOR)
+        self.add_log(f"ERROR: {error_msg}")
         
-        if messagebox.askyesno("Confirm", "Apply this update?"):
-            update_path = Path(file_path)
-            if self.updater.apply_update(update_path):
-                messagebox.showinfo("Success", "Update applied successfully!")
-                self.check_updates()
-            else:
-                messagebox.showerror("Error", "Failed to apply update")
+        # Add retry button
+        retry_btn = tk.Button(
+            self.content_frame,
+            text="Retry Installation",
+            font=('Segoe UI', 12, 'bold'),
+            bg=WARNING_COLOR,
+            fg='white',
+            activebackground=WARNING_DARK,
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=30,
+            pady=10,
+            command=self.show_welcome_screen
+        )
+        retry_btn.pack(pady=10)
+        
+        # Show error message
+        self.root.after(500, lambda: messagebox.showerror(
+            "Installation Failed",
+            f"Installation failed:\n\n{error_msg}"
+        ))
     
     def launch_app(self):
-        """Launch the main application"""
+        """Launch the application"""
+        # Try to find launcher
+        launchers = [
+            BASE_DIR / "run.bat",
+            BASE_DIR / "run.py",
+            BASE_DIR / "run.sh"
+        ]
+        
+        for launcher in launchers:
+            if launcher.exists():
+                try:
+                    if platform.system() == "Windows":
+                        os.startfile(launcher)
+                    else:
+                        subprocess.Popen([str(launcher)])
+                    
+                    # Close installer
+                    self.root.after(1000, self.root.destroy)
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to launch {launcher}: {e}")
+        
+        # Fallback
         app_path = INSTALL_DIR / "autoclicker.py"
-        
-        if not app_path.exists():
+        if app_path.exists():
+            try:
+                os.chdir(INSTALL_DIR)
+                subprocess.Popen([sys.executable, "autoclicker.py"])
+                self.root.after(1000, self.root.destroy)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to launch: {str(e)}")
+        else:
             messagebox.showerror("Error", "Application not found!")
-            return
-        
-        try:
-            # Change to app directory
-            os.chdir(INSTALL_DIR)
-            
-            # Launch in background
-            if platform.system() == "Windows":
-                subprocess.Popen([
-                    sys.executable, "autoclicker.py"
-                ], creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                subprocess.Popen([
-                    sys.executable, "autoclicker.py"
-                ])
-            
-            # Close bootstrapper
-            self.root.after(1000, self.root.destroy)
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to launch: {str(e)}")
     
     def uninstall_app(self):
-        """Uninstall the application"""
-        if not messagebox.askyesno("Confirm", 
-            "Uninstall Autoclicker Ultimate?\n\n"
+        """Uninstall application"""
+        if not INSTALL_DIR.exists():
+            messagebox.showinfo("Not Installed", "Application is not installed!")
+            return
+        
+        if not messagebox.askyesno("Confirm Uninstall",
+            f"Uninstall {APP_NAME}?\n\n"
             "This will remove the application but keep your settings."
         ):
             return
         
-        # Run uninstaller
-        uninstaller_path = CONFIG_DIR / "uninstaller.py"
-        if uninstaller_path.exists():
-            subprocess.Popen([sys.executable, str(uninstaller_path)])
-            self.root.destroy()
-        else:
-            # Manual uninstall
-            try:
-                if INSTALL_DIR.exists():
-                    shutil.rmtree(INSTALL_DIR, ignore_errors=True)
-                messagebox.showinfo("Success", "Uninstall complete!")
-                self.notebook.forget(0)
-                self.create_welcome_tab()
-            except Exception as e:
-                messagebox.showerror("Error", f"Uninstall failed: {str(e)}")
-    
-    def copy_to_clipboard(self, text):
-        """Copy text to clipboard"""
-        self.root.clipboard_clear()
-        self.root.clipboard_append(text)
-        messagebox.showinfo("Copied", "System info copied to clipboard!")
-    
-    def clear_cache(self):
-        """Clear application cache"""
-        cache_dirs = [
-            CONFIG_DIR / "cache",
-            INSTALL_DIR / "__pycache__" if INSTALL_DIR.exists() else None
-        ]
-        
-        cleared = 0
-        for cache_dir in cache_dirs:
-            if cache_dir and cache_dir.exists():
-                shutil.rmtree(cache_dir, ignore_errors=True)
-                cleared += 1
-        
-        messagebox.showinfo("Cache Cleared", f"Cleared {cleared} cache directories")
-    
-    def repair_installation(self):
-        """Repair installation"""
-        if not INSTALL_DIR.exists():
-            messagebox.showerror("Error", "Application not installed!")
-            return
-        
-        if messagebox.askyesno("Repair", "Repair installation?\n\nThis will reinstall dependencies and fix missing files."):
-            self.start_installation()
-    
-    def load_logs(self):
-        """Load and display logs"""
         try:
-            self.log_text.config(state='normal')
-            self.log_text.delete(1.0, 'end')
+            # Remove installation
+            if INSTALL_DIR.exists():
+                shutil.rmtree(INSTALL_DIR, ignore_errors=True)
             
-            if LOG_FILE.exists():
-                with open(LOG_FILE, 'r') as f:
-                    logs = f.read()
-                self.log_text.insert('end', logs)
-            else:
-                self.log_text.insert('end', "No logs found.")
+            # Remove launchers
+            launchers = [
+                BASE_DIR / "run.bat",
+                BASE_DIR / "run.py",
+                BASE_DIR / "run.sh",
+                BASE_DIR / f"Start_{APP_NAME.replace(' ', '_')}.bat",
+                BASE_DIR / "uninstall.py",
+                BASE_DIR / "uninstall.bat"
+            ]
             
-            self.log_text.config(state='disabled')
-            self.log_text.see('end')
+            for launcher in launchers:
+                launcher_path = BASE_DIR / launcher
+                if launcher_path.exists():
+                    launcher_path.unlink()
+            
+            messagebox.showinfo("Success", "Uninstall complete!")
+            self.show_welcome_screen()
             
         except Exception as e:
-            logger.error(f"Failed to load logs: {e}")
-    
-    def clear_logs(self):
-        """Clear log file"""
-        if messagebox.askyesno("Clear Logs", "Clear all log files?"):
-            if LOG_FILE.exists():
-                LOG_FILE.unlink()
-            self.load_logs()
-    
-    def open_folder(self, folder_path):
-        """Open folder in file explorer"""
-        try:
-            if platform.system() == "Windows":
-                os.startfile(folder_path)
-            elif platform.system() == "Darwin":
-                subprocess.Popen(['open', folder_path])
-            else:
-                subprocess.Popen(['xdg-open', folder_path])
-        except Exception as e:
-            messagebox.showerror("Error", f"Cannot open folder: {str(e)}")
+            messagebox.showerror("Error", f"Uninstall failed: {str(e)}")
     
     def run(self):
         """Start the GUI"""
         self.root.mainloop()
 
 # ============== COMMAND LINE INTERFACE ==============
-class CLI:
-    def __init__(self):
-        self.installer = Installer()
-        self.updater = Updater()
-        self.system_checker = SystemChecker()
-        
-    def show_help(self):
-        """Show help information"""
-        help_text = f"""
-{APP_NAME} Bootstrapper - Command Line Interface
-
-Usage:
-  python bootstrapper.py [command]
-
-Commands:
-  install     - Install the application
-  update      - Check and install updates
-  launch      - Launch the application
-  uninstall   - Remove the application
-  status      - Show installation status
-  system      - Show system information
-  repair      - Repair installation
-  gui         - Launch graphical installer (default)
-  help        - Show this help
-
-Examples:
-  python bootstrapper.py install
-  python bootstrapper.py update
-  python bootstrapper.py launch
-        """
-        print(help_text)
+def command_line_installer():
+    """Command line installer"""
+    print(f"\n{APP_NAME} Installer")
+    print("=" * 50)
+    print()
     
-    def install(self):
-        """Install via CLI"""
-        print(f"\n=== Installing {APP_NAME} ===\n")
-        
-        # Check system
-        print("1. Checking system...")
-        py_ok, py_msg = self.system_checker.check_python_version()
-        print(f"   Python: {py_msg}")
-        
-        if not py_ok:
-            print("   ❌ Python version check failed!")
-            return
-        
-        os_ok, os_msg = self.system_checker.check_os()
-        print(f"   OS: {os_msg}")
-        
-        if not os_ok:
-            print("   ❌ OS not supported!")
-            return
-        
-        # Setup environment
-        print("\n2. Setting up environment...")
-        if not self.installer.setup_environment():
-            print("   ❌ Failed to setup environment!")
-            return
-        print("   ✓ Environment ready")
-        
-        # Install dependencies
-        print("\n3. Installing dependencies...")
-        if not self.installer.install_dependencies():
-            print("   ❌ Failed to install dependencies!")
-            return
-        print("   ✓ Dependencies installed")
-        
-        # Copy files
-        print("\n4. Copying application files...")
-        current_dir = Path(__file__).parent
-        source_files = ["autoclicker.py", "key_manager.py", "requirements.txt"]
-        
-        for file in source_files:
-            src = current_dir / file
-            if src.exists():
-                shutil.copy2(src, INSTALL_DIR / file)
-                print(f"   ✓ Copied {file}")
-        
-        # Create config
-        config = {
-            "version": APP_VERSION,
-            "installed_at": datetime.now().isoformat()
-        }
-        
-        with open(INSTALL_DIR / "config.json", 'w') as f:
-            json.dump(config, f, indent=2)
-        
-        print(f"\n✅ Installation complete!")
-        print(f"   Location: {INSTALL_DIR}")
-        print(f"   Run 'python bootstrapper.py launch' to start the application")
+    installer = SimpleInstaller()
     
-    def update(self):
-        """Update via CLI"""
-        print(f"\n=== Checking for Updates ===\n")
-        
-        update_info = self.updater.check_for_updates()
-        
-        if update_info.get('available'):
-            print(f"Update available: v{update_info['latest_version']}")
-            print(f"Current version: v{APP_VERSION}")
-            
-            response = input("\nDownload and install update? (y/N): ").strip().lower()
-            if response == 'y':
-                print("\nDownloading update...")
-                update_path = self.updater.download_update(update_info.get('url'))
-                
-                if update_path and self.updater.verify_update(update_path):
-                    print("Applying update...")
-                    if self.updater.apply_update(update_path):
-                        print("✅ Update applied successfully!")
-                    else:
-                        print("❌ Failed to apply update")
-                else:
-                    print("❌ Update verification failed")
-        else:
-            print(f"You have the latest version: v{APP_VERSION}")
-    
-    def launch(self):
-        """Launch via CLI"""
-        app_path = INSTALL_DIR / "autoclicker.py"
-        
-        if not app_path.exists():
-            print("❌ Application not installed!")
-            print("Run 'python bootstrapper.py install' first")
-            return
-        
-        print(f"Launching {APP_NAME}...")
-        
-        try:
-            os.chdir(INSTALL_DIR)
-            subprocess.Popen([sys.executable, "autoclicker.py"])
-            print("✅ Application launched!")
-        except Exception as e:
-            print(f"❌ Failed to launch: {e}")
-    
-    def uninstall(self):
-        """Uninstall via CLI"""
-        print(f"\n=== Uninstall {APP_NAME} ===\n")
-        
-        if not INSTALL_DIR.exists():
-            print("Application not installed!")
-            return
-        
-        print(f"Installation location: {INSTALL_DIR}")
-        print(f"Config location: {CONFIG_DIR}")
-        
-        response = input("\nRemove application? (y/N): ").strip().lower()
+    if installer.is_installed():
+        print("Already installed!")
+        print(f"Location: {INSTALL_DIR}")
+        print()
+        response = input("Reinstall? (y/N): ").strip().lower()
         if response != 'y':
-            print("Uninstall cancelled.")
+            print("Exiting...")
             return
-        
-        # Remove installation
-        if INSTALL_DIR.exists():
-            shutil.rmtree(INSTALL_DIR, ignore_errors=True)
-            print("✓ Removed installation")
-        
-        response = input("Remove all settings and configurations? (y/N): ").strip().lower()
-        if response == 'y':
-            if CONFIG_DIR.exists():
-                shutil.rmtree(CONFIG_DIR, ignore_errors=True)
-                print("✓ Removed configurations")
-        
-        print("\n✅ Uninstall complete!")
     
-    def status(self):
-        """Show status via CLI"""
-        print(f"\n=== {APP_NAME} Status ===\n")
-        
-        # Installation status
-        installed = self.installer.check_installation()
-        print(f"Installed: {'✅ Yes' if installed else '❌ No'}")
-        
-        if installed:
-            config_file = INSTALL_DIR / "config.json"
-            if config_file.exists():
-                with open(config_file, 'r') as f:
-                    config = json.load(f)
-                print(f"Version: {config.get('version', 'Unknown')}")
-                print(f"Installed at: {config.get('installed_at', 'Unknown')}")
-            
-            # Check for updates
-            print("\nChecking for updates...")
-            update_info = self.updater.check_for_updates()
-            if update_info.get('available'):
-                print(f"Update available: v{update_info['latest_version']}")
-            else:
-                print("You have the latest version")
-        
-        # System info
-        print("\n=== System Information ===")
-        system_info = self.system_checker.get_system_info()
-        for key, value in system_info.items():
-            print(f"{key}: {value}")
+    print("Starting installation...")
+    print(f"Installing to: {INSTALL_DIR}")
+    print()
     
-    def system_info(self):
-        """Show system information"""
-        system_info = self.system_checker.get_system_info()
+    try:
+        def show_progress(percent, message):
+            print(f"[{int(percent):3d}%] {message}")
         
-        print(f"\n=== System Information ===\n")
-        for key, value in system_info.items():
-            print(f"{key}: {value}")
-    
-    def repair(self):
-        """Repair installation via CLI"""
-        print(f"\n=== Repair Installation ===\n")
+        def show_log(message):
+            print(f"  {message}")
         
-        if not INSTALL_DIR.exists():
-            print("❌ Application not installed!")
-            return
+        success = installer.install(show_progress, show_log)
         
-        print("Reinstalling dependencies...")
-        if self.installer.install_dependencies():
-            print("✅ Repair complete!")
+        if success:
+            print("\n" + "=" * 50)
+            print("Installation complete!")
+            print(f"Location: {INSTALL_DIR}")
+            print()
+            print("Launchers created:")
+            print("  • run.bat (Windows)")
+            print("  • run.py (Cross-platform)")
+            print("  • run.sh (Linux/Mac)")
+            print()
+            print("To launch: Double-click 'run.bat' or run 'python run.py'")
         else:
-            print("❌ Repair failed!")
+            print("\nInstallation failed!")
+            print("Check installer.log for details.")
+            sys.exit(1)
+        
+    except Exception as e:
+        print(f"\nInstallation failed: {str(e)}")
+        sys.exit(1)
 
 # ============== MAIN ==============
 def main():
     """Main entry point"""
-    logger.info(f"{APP_NAME} Bootstrapper started")
-    logger.info(f"Python: {sys.version}")
-    logger.info(f"Platform: {platform.platform()}")
+    print(f"{APP_NAME} Installer")
+    print("=" * 50)
     
-    # Parse command line arguments
-    if len(sys.argv) > 1:
-        cli = CLI()
-        command = sys.argv[1].lower()
-        
-        if command == "install":
-            cli.install()
-        elif command == "update":
-            cli.update()
-        elif command == "launch":
-            cli.launch()
-        elif command == "uninstall":
-            cli.uninstall()
-        elif command == "status":
-            cli.status()
-        elif command == "system":
-            cli.system_info()
-        elif command == "repair":
-            cli.repair()
-        elif command == "help":
-            cli.show_help()
-        elif command == "gui":
-            # Fall through to GUI
-            pass
-        else:
-            print(f"Unknown command: {command}")
-            cli.show_help()
-            sys.exit(1)
-    else:
-        # No arguments, launch GUI
-        try:
-            gui = BootstrapGUI()
-            gui.run()
-        except Exception as e:
-            logger.error(f"GUI failed: {e}")
-            print(f"GUI error: {e}")
-            print("\nYou can use command line mode:")
-            print("  python bootstrapper.py help")
+    # Check if tkinter is available
+    try:
+        import tkinter
+    except ImportError:
+        print("tkinter not installed!")
+        print("Please install tkinter to use the graphical installer.")
+        print("Using command-line mode instead...")
+        command_line_installer()
+        return
+    
+    # Check command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] in ["--cli", "-c", "cli", "--console"]:
+        command_line_installer()
+        return
+    
+    # Launch GUI installer
+    try:
+        app = SimpleInstallerGUI()
+        app.run()
+    except Exception as e:
+        print(f"GUI failed: {str(e)}")
+        print("Falling back to command-line mode...")
+        command_line_installer()
 
 if __name__ == "__main__":
     main()

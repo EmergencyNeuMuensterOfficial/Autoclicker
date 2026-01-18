@@ -32,9 +32,9 @@ except ImportError:
 # ============== FIREBASE CONFIGURATION ==============
 # IMPORTANT: Replace these with your Firebase project details
 FIREBASE_CONFIG = {
-    'project_id': 'enm-tech-34ef4',  # e.g., 'autoclicker-keys'
-    'database_url': 'https://enm-tech-34ef4-default-rtdb.europe-west1.firebasedatabase.app/',  # Your Realtime Database URL
-    'api_key': 'YOUR_API_KEY'  # Optional: for additional security
+    'project_id': 'enm-tech-34ef4',
+    'database_url': 'https://enm-tech-34ef4-default-rtdb.europe-west1.firebasedatabase.app/',
+    'api_key': 'YOUR_API_KEY'
 }
 
 # ============== KEY SYSTEM ==============
@@ -47,18 +47,13 @@ class KeySystem:
     def get_hwid(self):
         """Generate a unique hardware ID"""
         try:
-            # Combine multiple system identifiers
             import platform
             system_info = f"{platform.node()}-{platform.machine()}-{platform.processor()}"
-            
-            # Try to get MAC address
             mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
                           for elements in range(0, 48, 8)][::-1])
-            
             combined = f"{system_info}-{mac}"
             return hashlib.sha256(combined.encode()).hexdigest()[:32]
         except:
-            # Fallback
             return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()[:32]
             
     def load_saved_key(self):
@@ -122,21 +117,17 @@ class KeySystem:
         if not key:
             return False, "Please enter a license key"
             
-        # Check if Firebase is configured
         if 'YOUR_PROJECT_ID' in FIREBASE_CONFIG['database_url']:
             return False, "Firebase not configured. See instructions."
             
-        # Get key data from Firebase
         key_data = self.firebase_request(f"keys/{key}")
         
         if key_data is None:
             return False, "Invalid license key"
             
-        # Check if key is active
         if not key_data.get('active', False):
             return False, "License key has been deactivated"
             
-        # Check expiration
         expires = key_data.get('expires')
         if expires:
             try:
@@ -146,15 +137,12 @@ class KeySystem:
             except:
                 pass
                 
-        # Check HWID binding
         bound_hwid = key_data.get('hwid')
         
         if bound_hwid:
-            # Key is already bound to a device
             if bound_hwid != self.hwid:
                 return False, "License key is already used on another device"
         else:
-            # Bind key to this device
             update_data = {
                 'hwid': self.hwid,
                 'activated_at': datetime.now().isoformat(),
@@ -162,7 +150,6 @@ class KeySystem:
             }
             self.firebase_request(f"keys/{key}", method='PATCH', data=update_data)
             
-        # Save key locally
         self.save_key(key)
         self.saved_key = key
         
@@ -183,7 +170,7 @@ class KeyGenerator:
         import string
         chars = string.ascii_uppercase + string.digits
         parts = [''.join(random.choices(chars, k=5)) for _ in range(4)]
-        return '-'.join(parts)  # Format: XXXXX-XXXXX-XXXXX-XXXXX
+        return '-'.join(parts)
         
     @staticmethod
     def add_key_to_firebase(key, expires=None, note=""):
@@ -219,7 +206,6 @@ class LoginWindow:
         self.on_success = on_success
         self.key_system = KeySystem()
         
-        # Check for saved valid key
         if self.key_system.saved_key:
             success, msg = self.key_system.check_saved_key()
             if success:
@@ -231,99 +217,153 @@ class LoginWindow:
     def create_window(self):
         self.root = tk.Tk()
         self.root.title("Autoclicker Ultimate - Activation")
-        self.root.geometry("400x300")
+        self.root.geometry("500x400")
         self.root.resizable(False, False)
-        self.root.configure(bg='#1e1e1e')
+        self.root.configure(bg='#0f172a')
         
         # Center window
         self.root.eval('tk::PlaceWindow . center')
         
-        # Header
-        header = tk.Frame(self.root, bg='#0078d4', height=60)
+        # Modern header with gradient effect
+        header = tk.Frame(self.root, bg='#1e293b', height=80)
         header.pack(fill='x')
         header.pack_propagate(False)
         
         tk.Label(
-            header, text="⚡ AUTOCLICKER ULTIMATE",
-            font=('Segoe UI', 14, 'bold'),
-            fg='#ffffff', bg='#0078d4'
-        ).pack(pady=15)
+            header, text="🚀 AUTOCLICKER ULTIMATE",
+            font=('Segoe UI', 16, 'bold'),
+            fg='#ffffff', bg='#1e293b'
+        ).pack(pady=20)
         
-        # Main content
-        main = tk.Frame(self.root, bg='#1e1e1e', padx=40, pady=20)
+        # Main content with card design
+        main = tk.Frame(self.root, bg='#0f172a', padx=40, pady=30)
         main.pack(fill='both', expand=True)
         
-        tk.Label(
-            main, text="Enter your license key to activate",
-            font=('Segoe UI', 11),
-            fg='#888888', bg='#1e1e1e'
-        ).pack(pady=(10, 20))
+        card = tk.Frame(main, bg='#1e293b', padx=30, pady=25, relief='flat', bd=0)
+        card.pack(fill='both', expand=True)
         
-        # Key entry
+        tk.Label(
+            card, text="License Activation",
+            font=('Segoe UI', 14, 'bold'),
+            fg='#ffffff', bg='#1e293b'
+        ).pack(pady=(0, 10))
+        
+        tk.Label(
+            card, text="Enter your license key to unlock all features",
+            font=('Segoe UI', 10),
+            fg='#94a3b8', bg='#1e293b'
+        ).pack(pady=(0, 20))
+        
+        # Key entry with modern styling
+        entry_frame = tk.Frame(card, bg='#1e293b')
+        entry_frame.pack(pady=(0, 15))
+        
         self.key_var = tk.StringVar()
         self.key_entry = tk.Entry(
-            main, textvariable=self.key_var,
-            font=('Consolas', 12),
-            bg='#2d2d2d', fg='#ffffff',
+            entry_frame,
+            textvariable=self.key_var,
+            font=('Consolas', 13),
+            bg='#334155',
+            fg='#ffffff',
             insertbackground='#ffffff',
             relief='flat',
             justify='center',
-            width=30
+            width=30,
+            bd=0,
+            highlightthickness=2,
+            highlightbackground='#3b82f6',
+            highlightcolor='#3b82f6'
         )
-        self.key_entry.pack(ipady=10)
+        self.key_entry.pack(ipady=12, padx=5)
         self.key_entry.bind('<Return>', lambda e: self.activate())
+        self.key_entry.focus_set()
         
         # Status label
         self.status_var = tk.StringVar()
         self.status_label = tk.Label(
-            main, textvariable=self.status_var,
+            card, textvariable=self.status_var,
             font=('Segoe UI', 10),
-            fg='#f44336', bg='#1e1e1e'
+            fg='#f87171', bg='#1e293b',
+            height=2
         )
-        self.status_label.pack(pady=10)
+        self.status_label.pack()
         
-        # Activate button
+        # Modern button with hover effect
         self.activate_btn = tk.Button(
-            main, text="ACTIVATE",
+            card, text="ACTIVATE LICENSE",
             font=('Segoe UI', 11, 'bold'),
-            bg='#0078d4', fg='#ffffff',
-            activebackground='#1a86d9',
+            bg='#3b82f6',
+            fg='#ffffff',
+            activebackground='#2563eb',
+            activeforeground='#ffffff',
             relief='flat',
             cursor='hand2',
             command=self.activate,
-            width=20
+            width=25,
+            bd=0,
+            highlightthickness=0
         )
-        self.activate_btn.pack(pady=10, ipady=8)
+        self.activate_btn.pack(pady=(10, 15), ipady=10)
         
-        # HWID display
+        # HWID display in subtle style
+        hwid_frame = tk.Frame(card, bg='#1e293b')
+        hwid_frame.pack(pady=(10, 0))
+        
         tk.Label(
-            main, text=f"HWID: {self.key_system.hwid[:16]}...",
-            font=('Segoe UI', 8),
-            fg='#555555', bg='#1e1e1e'
-        ).pack(pady=(20, 0))
+            hwid_frame, text="HWID:",
+            font=('Segoe UI', 9),
+            fg='#64748b', bg='#1e293b'
+        ).pack(side='left')
+        
+        tk.Label(
+            hwid_frame, text=f"{self.key_system.hwid[:16]}...",
+            font=('Consolas', 9),
+            fg='#94a3b8', bg='#1e293b',
+            cursor='arrow'
+        ).pack(side='left', padx=5)
+        
+        # Copy HWID button
+        copy_btn = tk.Button(
+            hwid_frame, text="📋",
+            font=('Segoe UI', 9),
+            bg='#475569',
+            fg='#ffffff',
+            relief='flat',
+            cursor='hand2',
+            command=lambda: self.copy_to_clipboard(self.key_system.hwid),
+            width=3
+        )
+        copy_btn.pack(side='left', padx=10)
         
         self.root.mainloop()
+        
+    def copy_to_clipboard(self, text):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.status_var.set("HWID copied to clipboard!")
+        self.status_label.config(fg='#10b981')
         
     def activate(self):
         key = self.key_var.get().strip()
         
-        self.activate_btn.config(state='disabled', text='Checking...')
+        self.activate_btn.config(state='disabled', text='VALIDATING...')
         self.status_var.set("")
         self.root.update()
         
         success, message = self.key_system.validate_key(key)
         
         if success:
-            self.status_label.config(fg='#4ec959')
+            self.status_label.config(fg='#10b981')
             self.status_var.set("✓ " + message)
+            self.activate_btn.config(text='SUCCESS!')
             self.root.update()
             time.sleep(1)
             self.root.destroy()
             self.on_success()
         else:
-            self.status_label.config(fg='#f44336')
+            self.status_label.config(fg='#f87171')
             self.status_var.set("✗ " + message)
-            self.activate_btn.config(state='normal', text='ACTIVATE')
+            self.activate_btn.config(state='normal', text='ACTIVATE LICENSE')
 
 
 # ============== CONFIGURATION ==============
@@ -355,34 +395,45 @@ DEFAULT_CONFIG = {
     'playback_loop': False
 }
 
+# Modern color schemes
 THEMES = {
     'dark': {
-        'bg': '#1e1e1e',
-        'bg_light': '#2d2d2d',
-        'bg_input': '#3c3c3c',
-        'border': '#404040',
-        'text': '#ffffff',
-        'text_dim': '#888888',
-        'accent': '#0078d4',
-        'accent_hover': '#1a86d9',
-        'success': '#4ec959',
-        'warning': '#f9a825',
-        'danger': '#f44336',
-        'purple': '#9c27b0'
+        'bg': '#0f172a',
+        'bg_light': '#1e293b',
+        'bg_input': '#334155',
+        'border': '#475569',
+        'text': '#f1f5f9',
+        'text_dim': '#94a3b8',
+        'accent': '#3b82f6',
+        'accent_hover': '#2563eb',
+        'accent_light': '#60a5fa',
+        'success': '#10b981',
+        'success_hover': '#059669',
+        'warning': '#f59e0b',
+        'warning_hover': '#d97706',
+        'danger': '#ef4444',
+        'danger_hover': '#dc2626',
+        'purple': '#8b5cf6',
+        'purple_hover': '#7c3aed'
     },
     'light': {
-        'bg': '#f0f0f0',
+        'bg': '#f8fafc',
         'bg_light': '#ffffff',
-        'bg_input': '#ffffff',
-        'border': '#cccccc',
-        'text': '#1e1e1e',
-        'text_dim': '#666666',
-        'accent': '#0078d4',
-        'accent_hover': '#1a86d9',
-        'success': '#2e7d32',
-        'warning': '#f57c00',
-        'danger': '#c62828',
-        'purple': '#7b1fa2'
+        'bg_input': '#f1f5f9',
+        'border': '#cbd5e1',
+        'text': '#0f172a',
+        'text_dim': '#64748b',
+        'accent': '#3b82f6',
+        'accent_hover': '#2563eb',
+        'accent_light': '#60a5fa',
+        'success': '#10b981',
+        'success_hover': '#059669',
+        'warning': '#f59e0b',
+        'warning_hover': '#d97706',
+        'danger': '#ef4444',
+        'danger_hover': '#dc2626',
+        'purple': '#8b5cf6',
+        'purple_hover': '#7c3aed'
     }
 }
 
@@ -424,6 +475,9 @@ class Autoclicker:
         self.load_config()
         self.colors = THEMES[self.config['theme']]
         
+        # Initialize all tkinter variables
+        self.initialize_tk_variables()
+        
         self.setup_gui()
         self.setup_hotkeys()
         self.load_profiles()
@@ -433,11 +487,67 @@ class Autoclicker:
         self.tray_icon = None
         if HAS_TRAY and self.config['minimize_to_tray']:
             self.setup_tray()
+    
+    def initialize_tk_variables(self):
+        """Initialize all tkinter variables to prevent AttributeErrors"""
+        # Autoclicker tab variables
+        self.interval_var = tk.StringVar(value=str(self.config['interval']))
+        self.use_random_var = tk.BooleanVar(value=self.config['use_random_interval'])
+        self.random_min_var = tk.StringVar(value=str(self.config['interval_random_min']))
+        self.random_max_var = tk.StringVar(value=str(self.config['interval_random_max']))
+        self.button_var = tk.StringVar(value=self.config['click_button'])
+        self.click_type_var = tk.StringVar(value=self.config['click_type'])
+        self.click_limit_var = tk.StringVar(value=str(self.config['click_limit']))
+        self.use_fixed_pos_var = tk.BooleanVar(value=self.config['use_fixed_position'])
+        self.fixed_x_var = tk.StringVar(value=str(self.config['fixed_x']))
+        self.fixed_y_var = tk.StringVar(value=str(self.config['fixed_y']))
+        self.hold_mode_var = tk.BooleanVar(value=False)
+        self.start_delay_var = tk.StringVar(value=str(self.config['start_delay']))
+        self.auto_status_var = tk.StringVar(value="Ready")
+        self.session_clicks_var = tk.StringVar(value="0 clicks")
+        
+        # Recorder tab variables
+        self.record_movements_var = tk.BooleanVar(value=self.config['record_movements'])
+        self.record_keyboard_var = tk.BooleanVar(value=self.config['record_keyboard'])
+        self.record_status_var = tk.StringVar(value="Ready to record")
+        self.actions_var = tk.StringVar(value="0 actions")
+        self.manual_delay_var = tk.StringVar(value="1.0")
+        self.speed_var = tk.StringVar(value=str(self.config['playback_speed']))
+        self.repeat_var = tk.StringVar(value=str(self.config['playback_repeat']))
+        self.loop_var = tk.BooleanVar(value=self.config['playback_loop'])
+        self.play_status_var = tk.StringVar(value="Stopped")
+        self.play_progress_var = tk.StringVar(value="")
+        
+        # Macro tab variables
+        self.macro_status_var = tk.StringVar(value="Ready")
+        self.macro_count_var = tk.StringVar(value="0 keys")
+        self.macro_speed_var = tk.StringVar(value="1.0")
+        self.macro_repeat_var = tk.StringVar(value="1")
+        self.macro_loop_var = tk.BooleanVar(value=False)
+        self.macro_name_var = tk.StringVar()
+        self.macro_list_var = tk.StringVar()
+        
+        # Settings tab variables
+        self.theme_var = tk.StringVar(value=self.config['theme'])
+        self.always_on_top_var = tk.BooleanVar(value=self.config['always_on_top'])
+        self.minimize_tray_var = tk.BooleanVar(value=self.config['minimize_to_tray'])
+        self.profile_var = tk.StringVar(value="default")
+        self.new_profile_var = tk.StringVar()
+        
+        # Hotkey variables
+        self.hotkey_vars = {
+            'autoclicker': tk.StringVar(value=self.config['hotkey_autoclicker']),
+            'record': tk.StringVar(value=self.config['hotkey_record']),
+            'playback': tk.StringVar(value=self.config['hotkey_playback']),
+            'hold': tk.StringVar(value=self.config['hotkey_hold']),
+            'macro_record': tk.StringVar(value=self.config['hotkey_macro_record']),
+            'macro_play': tk.StringVar(value=self.config['hotkey_macro_play'])
+        }
             
     def setup_gui(self):
         self.root = tk.Tk()
         self.root.title("Autoclicker Ultimate")
-        self.root.geometry("520x650")
+        self.root.geometry("600x700")
         self.root.resizable(False, False)
         self.root.configure(bg=self.colors['bg'])
         
@@ -446,256 +556,460 @@ class Autoclicker:
             
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         
-        # Notebook style
+        # Custom styles
+        self.setup_styles()
+        
+        # Modern header
+        self.create_header()
+        
+        # Notebook with modern tabs
+        self.create_notebook()
+        
+    def setup_styles(self):
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure('TNotebook', background=self.colors['bg'], borderwidth=0)
-        style.configure('TNotebook.Tab',
+        
+        # Notebook style
+        style.configure('Custom.TNotebook', 
+                       background=self.colors['bg'],
+                       borderwidth=0)
+        style.configure('Custom.TNotebook.Tab',
                        background=self.colors['bg_light'],
                        foreground=self.colors['text'],
-                       padding=[10, 5],
-                       font=('Segoe UI', 9))
-        style.map('TNotebook.Tab',
-                 background=[('selected', self.colors['accent'])],
-                 foreground=[('selected', '#ffffff')])
+                       padding=[15, 8],
+                       font=('Segoe UI', 9, 'bold'))
+        style.map('Custom.TNotebook.Tab',
+                 background=[('selected', self.colors['accent']),
+                           ('active', self.colors['accent_light'])],
+                 foreground=[('selected', '#ffffff'),
+                           ('active', '#ffffff')])
         
-        # Header
-        header = tk.Frame(self.root, bg=self.colors['accent'], height=50)
+        # Combobox style
+        style.configure('Custom.TCombobox',
+                       fieldbackground=self.colors['bg_input'],
+                       background=self.colors['bg_input'],
+                       foreground=self.colors['text'],
+                       borderwidth=1,
+                       relief='flat')
+        style.map('Custom.TCombobox',
+                 fieldbackground=[('readonly', self.colors['bg_input'])],
+                 selectbackground=[('readonly', self.colors['accent'])],
+                 selectforeground=[('readonly', '#ffffff')])
+        
+    def create_header(self):
+        # Header with gradient effect
+        header = tk.Frame(self.root, bg=self.colors['accent'], height=70)
         header.pack(fill='x')
         header.pack_propagate(False)
         
+        # App title and logo
+        title_frame = tk.Frame(header, bg=self.colors['accent'])
+        title_frame.pack(side='left', padx=25, pady=20)
+        
         tk.Label(
-            header, text="⚡ AUTOCLICKER ULTIMATE",
-            font=('Segoe UI', 14, 'bold'),
-            fg='#ffffff', bg=self.colors['accent']
-        ).pack(side='left', padx=15, pady=12)
+            title_frame,
+            text="⚡",
+            font=('Segoe UI', 24),
+            fg='#ffffff',
+            bg=self.colors['accent']
+        ).pack(side='left')
         
-        self.header_status = tk.Label(
-            header, text="● Idle",
-            font=('Segoe UI', 10),
-            fg='#ffffff', bg=self.colors['accent']
+        tk.Label(
+            title_frame,
+            text="AUTOCLICKER ULTIMATE",
+            font=('Segoe UI', 16, 'bold'),
+            fg='#ffffff',
+            bg=self.colors['accent']
+        ).pack(side='left', padx=10)
+        
+        # Status indicator
+        status_frame = tk.Frame(header, bg=self.colors['accent'])
+        status_frame.pack(side='right', padx=25, pady=20)
+        
+        self.status_indicator = tk.Canvas(status_frame, width=12, height=12, 
+                                         bg=self.colors['accent'], highlightthickness=0)
+        self.status_indicator.pack(side='left')
+        self.status_indicator.create_oval(2, 2, 10, 10, fill='#10b981', outline='')
+        
+        self.status_label = tk.Label(
+            status_frame,
+            text="Ready",
+            font=('Segoe UI', 10, 'bold'),
+            fg='#ffffff',
+            bg=self.colors['accent']
         )
-        self.header_status.pack(side='right', padx=15)
+        self.status_label.pack(side='left', padx=8)
         
-        # Notebook
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+    def create_notebook(self):
+        # Create notebook with custom style
+        self.notebook = ttk.Notebook(self.root, style='Custom.TNotebook')
+        self.notebook.pack(fill='both', expand=True, padx=15, pady=(10, 15))
         
-        # Create tabs
+        # Create tabs with modern cards
         self.create_autoclicker_tab()
         self.create_recorder_tab()
         self.create_macro_tab()
         self.create_settings_tab()
         self.create_stats_tab()
         
-    def create_checkbox(self, parent, text, var, command=None):
-        cb = tk.Checkbutton(
-            parent, text=text,
-            variable=var,
-            font=('Segoe UI', 10),
-            fg=self.colors['text'],
-            bg=self.colors['bg_light'],
-            selectcolor=self.colors['bg_input'],
-            activebackground=self.colors['bg_light'],
-            activeforeground=self.colors['text'],
-            command=command
-        )
-        cb.pack(anchor='w', pady=2)
-        return cb
+    def create_section_card(self, parent, title, padx=20, pady=20):
+        """Create a modern card for sections"""
+        card = tk.Frame(parent, 
+                       bg=self.colors['bg_light'],
+                       relief='flat',
+                       bd=0,
+                       highlightthickness=0)
         
-    def create_button(self, parent, text, command, style='default', width=15):
+        # Section title
+        if title:
+            title_label = tk.Label(card,
+                                  text=title.upper(),
+                                  font=('Segoe UI', 10, 'bold'),
+                                  fg=self.colors['accent'],
+                                  bg=self.colors['bg_light'])
+            title_label.pack(anchor='w', pady=(0, 15))
+        
+        return card
+        
+    def create_entry(self, parent, label, var, width=10, **kwargs):
+        """Create labeled entry with modern styling"""
+        frame = tk.Frame(parent, bg=self.colors['bg_light'])
+        
+        if label:
+            tk.Label(frame, text=label,
+                    font=('Segoe UI', 10),
+                    fg=self.colors['text'],
+                    bg=self.colors['bg_light']).pack(side='left', padx=(0, 10))
+        
+        entry = tk.Entry(frame,
+                        textvariable=var,
+                        font=('Segoe UI', 10),
+                        bg=self.colors['bg_input'],
+                        fg=self.colors['text'],
+                        relief='flat',
+                        width=width,
+                        insertbackground=self.colors['text'],
+                        **kwargs)
+        entry.pack(side='left', ipady=4)
+        
+        return frame, entry
+        
+    def create_button(self, parent, text, command, style='primary', width=None, icon=None):
+        """Create modern button with icons and hover effects"""
         colors = {
-            'default': (self.colors['bg_input'], self.colors['text']),
-            'primary': (self.colors['accent'], '#ffffff'),
-            'success': (self.colors['success'], '#ffffff'),
-            'danger': (self.colors['danger'], '#ffffff'),
-            'warning': (self.colors['warning'], '#000000'),
-            'purple': (self.colors['purple'], '#ffffff')
+            'primary': {
+                'bg': self.colors['accent'],
+                'fg': '#ffffff',
+                'hover': self.colors['accent_hover'],
+                'active': self.colors['accent_hover']
+            },
+            'secondary': {
+                'bg': self.colors['bg_input'],
+                'fg': self.colors['text'],
+                'hover': self.colors['border'],
+                'active': self.colors['border']
+            },
+            'success': {
+                'bg': self.colors['success'],
+                'fg': '#ffffff',
+                'hover': self.colors['success_hover'],
+                'active': self.colors['success_hover']
+            },
+            'danger': {
+                'bg': self.colors['danger'],
+                'fg': '#ffffff',
+                'hover': self.colors['danger_hover'],
+                'active': self.colors['danger_hover']
+            },
+            'warning': {
+                'bg': self.colors['warning'],
+                'fg': '#ffffff',
+                'hover': self.colors['warning_hover'],
+                'active': self.colors['warning_hover']
+            },
+            'purple': {
+                'bg': self.colors['purple'],
+                'fg': '#ffffff',
+                'hover': self.colors['purple_hover'],
+                'active': self.colors['purple_hover']
+            }
         }
-        bg, fg = colors.get(style, colors['default'])
         
-        btn = tk.Button(
-            parent, text=text,
-            font=('Segoe UI', 10, 'bold'),
-            bg=bg, fg=fg,
-            activebackground=self.colors['accent_hover'],
-            activeforeground='#ffffff',
-            relief='flat',
-            cursor='hand2',
-            command=command,
-            width=width
-        )
+        btn_style = colors.get(style, colors['primary'])
+        
+        # Create button text with optional icon
+        btn_text = f"{icon} {text}" if icon else text
+        
+        btn = tk.Button(parent,
+                       text=btn_text,
+                       font=('Segoe UI', 10, 'bold'),
+                       bg=btn_style['bg'],
+                       fg=btn_style['fg'],
+                       activebackground=btn_style['active'],
+                       activeforeground=btn_style['fg'],
+                       relief='flat',
+                       cursor='hand2',
+                       command=command,
+                       bd=0,
+                       highlightthickness=0)
+        
+        if width:
+            btn.config(width=width)
+        
+        # Add hover effect
+        def on_enter(e):
+            if btn['state'] != 'disabled':
+                btn.config(bg=btn_style['hover'])
+        
+        def on_leave(e):
+            if btn['state'] != 'disabled':
+                btn.config(bg=btn_style['bg'])
+        
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+        
         return btn
+        
+    def create_checkbox(self, parent, text, var, command=None):
+        """Create modern checkbox"""
+        frame = tk.Frame(parent, bg=self.colors['bg_light'])
+        
+        # Custom checkbox using canvas
+        checkbox_canvas = tk.Canvas(frame, width=20, height=20, 
+                                   bg=self.colors['bg_light'], highlightthickness=0)
+        checkbox_canvas.pack(side='left')
+        
+        # Draw checkbox
+        checkbox_canvas.create_rectangle(2, 2, 18, 18, 
+                                       outline=self.colors['border'],
+                                       fill=self.colors['bg_input'],
+                                       width=1)
+        
+        # Draw checkmark (hidden initially)
+        checkmark = checkbox_canvas.create_text(10, 10, text="✓", 
+                                              fill=self.colors['success'],
+                                              font=('Segoe UI', 12, 'bold'),
+                                              state='hidden')
+        
+        def toggle_checkbox():
+            current = var.get()
+            var.set(not current)
+            if command:
+                command()
+            update_checkbox()
+        
+        def update_checkbox():
+            if var.get():
+                checkbox_canvas.itemconfig(checkmark, state='normal')
+                checkbox_canvas.itemconfig(1, fill=self.colors['accent_light'])
+            else:
+                checkbox_canvas.itemconfig(checkmark, state='hidden')
+                checkbox_canvas.itemconfig(1, fill=self.colors['bg_input'])
+        
+        # Make canvas clickable
+        checkbox_canvas.bind('<Button-1>', lambda e: toggle_checkbox())
+        
+        # Label
+        label = tk.Label(frame, text=text,
+                        font=('Segoe UI', 10),
+                        fg=self.colors['text'],
+                        bg=self.colors['bg_light'],
+                        cursor='hand2')
+        label.pack(side='left', padx=8)
+        label.bind('<Button-1>', lambda e: toggle_checkbox())
+        
+        # Initialize
+        update_checkbox()
+        
+        return frame
 
     # ============== AUTOCLICKER TAB ==============
     def create_autoclicker_tab(self):
         tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text=" Autoclicker ")
+        self.notebook.add(tab, text="  Autoclicker  ")
         
-        card = tk.Frame(tab, bg=self.colors['bg_light'], padx=20, pady=15)
-        card.pack(fill='both', expand=True, padx=10, pady=10)
+        # Main container with scroll
+        canvas = tk.Canvas(tab, bg=self.colors['bg'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
+        scrollable = tk.Frame(canvas, bg=self.colors['bg'])
         
-        # Interval section
-        tk.Label(card, text="CLICK INTERVAL", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
+        scrollable.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.create_window((0, 0), window=scrollable, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
         
-        interval_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        interval_frame.pack(fill='x', pady=5)
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
         
-        self.interval_var = tk.StringVar(value=str(self.config['interval']))
-        tk.Label(interval_frame, text="Interval:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(interval_frame, textvariable=self.interval_var, width=8,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        tk.Label(interval_frame, text="seconds", font=('Segoe UI', 10),
+        # Bind mouse wheel for scrolling
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
+        canvas.bind_all('<MouseWheel>', on_mousewheel)
+        
+        # Create sections
+        sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
+        sections_frame.pack(fill='x', pady=10)
+        
+        # Interval Section
+        interval_card = self.create_section_card(sections_frame, "Click Interval")
+        interval_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        # Interval input
+        interval_frame, self.interval_entry = self.create_entry(interval_card, "Interval (seconds):", 
+                                                               self.interval_var, 8)
+        interval_frame.pack(anchor='w', pady=5)
+        
+        # Random interval checkbox
+        self.random_checkbox = self.create_checkbox(interval_card, "Use random interval", 
+                                                   self.use_random_var, self.toggle_random_interval)
+        self.random_checkbox.pack(anchor='w', pady=5)
+        
+        # Random min/max
+        random_range_frame = tk.Frame(interval_card, bg=self.colors['bg_light'])
+        random_range_frame.pack(anchor='w', pady=5, padx=25)
+        
+        tk.Label(random_range_frame, text="Min:", font=('Segoe UI', 9),
                 fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
+        tk.Entry(random_range_frame, textvariable=self.random_min_var, width=6,
+                font=('Segoe UI', 9), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        tk.Label(random_range_frame, text="Max:", font=('Segoe UI', 9),
+                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left', padx=(10, 0))
+        tk.Entry(random_range_frame, textvariable=self.random_max_var, width=6,
+                font=('Segoe UI', 9), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
         
-        # Random interval
-        self.use_random_var = tk.BooleanVar(value=self.config['use_random_interval'])
-        self.create_checkbox(card, "Use random interval", self.use_random_var, self.toggle_random_interval)
-        
-        self.random_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        self.random_frame.pack(fill='x', pady=5)
-        
-        self.random_min_var = tk.StringVar(value=str(self.config['interval_random_min']))
-        self.random_max_var = tk.StringVar(value=str(self.config['interval_random_max']))
-        
-        tk.Label(self.random_frame, text="Min:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(self.random_frame, textvariable=self.random_min_var, width=6,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        tk.Label(self.random_frame, text="Max:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(10, 0))
-        tk.Entry(self.random_frame, textvariable=self.random_max_var, width=6,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
         self.toggle_random_interval()
         
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
+        # Click Options Section
+        click_card = self.create_section_card(sections_frame, "Click Options")
+        click_card.pack(fill='x', padx=10, pady=(0, 10))
         
-        # Click Options
-        tk.Label(card, text="CLICK OPTIONS", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
+        # Button selection
+        button_frame = tk.Frame(click_card, bg=self.colors['bg_light'])
+        button_frame.pack(anchor='w', pady=5)
         
-        btn_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        btn_frame.pack(fill='x', pady=5)
-        
-        tk.Label(btn_frame, text="Button:", font=('Segoe UI', 10),
+        tk.Label(button_frame, text="Button:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
         
-        self.button_var = tk.StringVar(value=self.config['click_button'])
         for btn in ['left', 'right', 'middle']:
-            rb = tk.Radiobutton(btn_frame, text=btn.capitalize(), variable=self.button_var, value=btn,
-                               font=('Segoe UI', 10), fg=self.colors['text'], bg=self.colors['bg_light'],
-                               selectcolor=self.colors['bg_input'], activebackground=self.colors['bg_light'])
-            rb.pack(side='left', padx=5)
+            rb = tk.Radiobutton(button_frame, text=btn.capitalize(), 
+                               variable=self.button_var, value=btn,
+                               font=('Segoe UI', 10), 
+                               fg=self.colors['text'], 
+                               bg=self.colors['bg_light'],
+                               selectcolor=self.colors['accent'],
+                               activebackground=self.colors['bg_light'])
+            rb.pack(side='left', padx=10)
             
-        type_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        type_frame.pack(fill='x', pady=5)
+        # Click type
+        type_frame = tk.Frame(click_card, bg=self.colors['bg_light'])
+        type_frame.pack(anchor='w', pady=5)
         
         tk.Label(type_frame, text="Type:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
         
-        self.click_type_var = tk.StringVar(value=self.config['click_type'])
         for ctype in ['single', 'double', 'triple']:
-            rb = tk.Radiobutton(type_frame, text=ctype.capitalize(), variable=self.click_type_var, value=ctype,
-                               font=('Segoe UI', 10), fg=self.colors['text'], bg=self.colors['bg_light'],
-                               selectcolor=self.colors['bg_input'], activebackground=self.colors['bg_light'])
-            rb.pack(side='left', padx=5)
+            rb = tk.Radiobutton(type_frame, text=ctype.capitalize(), 
+                               variable=self.click_type_var, value=ctype,
+                               font=('Segoe UI', 10), 
+                               fg=self.colors['text'], 
+                               bg=self.colors['bg_light'],
+                               selectcolor=self.colors['accent'],
+                               activebackground=self.colors['bg_light'])
+            rb.pack(side='left', padx=10)
             
-        limit_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        limit_frame.pack(fill='x', pady=5)
+        # Click limit
+        limit_frame, self.limit_entry = self.create_entry(click_card, "Click limit (0=infinite):", 
+                                                         self.click_limit_var, 8)
+        limit_frame.pack(anchor='w', pady=5)
         
-        self.click_limit_var = tk.StringVar(value=str(self.config['click_limit']))
-        tk.Label(limit_frame, text="Click limit (0=infinite):", font=('Segoe UI', 10),
+        # Position Section
+        pos_card = self.create_section_card(sections_frame, "Click Position")
+        pos_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        # Fixed position checkbox
+        self.fixed_pos_checkbox = self.create_checkbox(pos_card, "Click at fixed position", 
+                                                      self.use_fixed_pos_var, self.toggle_fixed_pos)
+        self.fixed_pos_checkbox.pack(anchor='w', pady=5)
+        
+        # Position inputs
+        pos_input_frame = tk.Frame(pos_card, bg=self.colors['bg_light'])
+        pos_input_frame.pack(anchor='w', pady=5, padx=25)
+        
+        tk.Label(pos_input_frame, text="X:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(limit_frame, textvariable=self.click_limit_var, width=8,
+        tk.Entry(pos_input_frame, textvariable=self.fixed_x_var, width=6,
                 font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='right', ipady=3)
-        
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
-        
-        # Position
-        tk.Label(card, text="CLICK POSITION", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
-        
-        self.use_fixed_pos_var = tk.BooleanVar(value=self.config['use_fixed_position'])
-        self.create_checkbox(card, "Click at fixed position", self.use_fixed_pos_var, self.toggle_fixed_pos)
-        
-        self.pos_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        self.pos_frame.pack(fill='x', pady=5)
-        
-        self.fixed_x_var = tk.StringVar(value=str(self.config['fixed_x']))
-        self.fixed_y_var = tk.StringVar(value=str(self.config['fixed_y']))
-        
-        tk.Label(self.pos_frame, text="X:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(self.pos_frame, textvariable=self.fixed_x_var, width=6,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        tk.Label(self.pos_frame, text="Y:", font=('Segoe UI', 10),
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        tk.Label(pos_input_frame, text="Y:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(10, 0))
-        tk.Entry(self.pos_frame, textvariable=self.fixed_y_var, width=6,
+        tk.Entry(pos_input_frame, textvariable=self.fixed_y_var, width=6,
                 font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
         
-        self.pick_pos_btn = self.create_button(self.pos_frame, "Pick", self.pick_position, 'default', 6)
-        self.pick_pos_btn.pack(side='right', ipady=2)
+        self.pick_pos_btn = self.create_button(pos_input_frame, "Pick Position", 
+                                             self.pick_position, 'secondary', 12)
+        self.pick_pos_btn.pack(side='left', padx=15)
+        
         self.toggle_fixed_pos()
         
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
+        # Options Section
+        options_card = self.create_section_card(sections_frame, "Options")
+        options_card.pack(fill='x', padx=10, pady=(0, 10))
         
-        # Options
-        options_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        options_frame.pack(fill='x')
+        # Hold mode
+        self.hold_checkbox = self.create_checkbox(options_card, "Hold mode (F9)", 
+                                                 self.hold_mode_var)
+        self.hold_checkbox.pack(anchor='w', pady=5)
         
-        self.hold_mode_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(options_frame, text="Hold mode (F9)", variable=self.hold_mode_var,
-                      font=('Segoe UI', 10), fg=self.colors['text'], bg=self.colors['bg_light'],
-                      selectcolor=self.colors['bg_input']).pack(side='left')
+        # Start delay
+        delay_frame, self.delay_entry = self.create_entry(options_card, "Start delay (seconds):", 
+                                                         self.start_delay_var, 8)
+        delay_frame.pack(anchor='w', pady=5)
         
-        tk.Label(options_frame, text="Delay:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(20, 5))
-        self.start_delay_var = tk.StringVar(value=str(self.config['start_delay']))
-        tk.Entry(options_frame, textvariable=self.start_delay_var, width=4,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', ipady=3)
-        tk.Label(options_frame, text="s", font=('Segoe UI', 10),
-                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
+        # Status and Control Section
+        control_card = self.create_section_card(sections_frame, "")
+        control_card.pack(fill='x', padx=10, pady=(0, 10))
         
-        # Status
-        status_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        status_frame.pack(fill='x', pady=(10, 5))
+        # Status display
+        status_frame = tk.Frame(control_card, bg=self.colors['bg_light'])
+        status_frame.pack(fill='x', pady=(10, 15))
         
-        self.auto_status_dot = tk.Label(status_frame, text="●", font=('Segoe UI', 16),
-                                        fg=self.colors['text_dim'], bg=self.colors['bg_light'])
-        self.auto_status_dot.pack(side='left')
+        self.auto_status_indicator = tk.Canvas(status_frame, width=16, height=16, 
+                                             bg=self.colors['bg_light'], highlightthickness=0)
+        self.auto_status_indicator.pack(side='left', padx=(0, 10))
+        self.auto_status_indicator.create_oval(4, 4, 12, 12, fill=self.colors['text_dim'], 
+                                              outline='')
         
-        self.auto_status_var = tk.StringVar(value="Stopped")
-        tk.Label(status_frame, textvariable=self.auto_status_var, font=('Segoe UI', 12, 'bold'),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=10)
+        tk.Label(status_frame, textvariable=self.auto_status_var, 
+                font=('Segoe UI', 12, 'bold'),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
         
-        self.session_clicks_var = tk.StringVar(value="0 clicks")
-        tk.Label(status_frame, textvariable=self.session_clicks_var, font=('Segoe UI', 10),
+        tk.Label(status_frame, textvariable=self.session_clicks_var,
+                font=('Segoe UI', 10),
                 fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
         
-        self.auto_toggle_btn = self.create_button(card, "▶ START (F6)", self.toggle_autoclicker, 'success', 20)
-        self.auto_toggle_btn.pack(pady=8, ipady=6)
+        # Main toggle button
+        self.auto_toggle_btn = self.create_button(control_card, "▶ START AUTOCLICKER (F6)", 
+                                                 self.toggle_autoclicker, 'success', 25, icon='⚡')
+        self.auto_toggle_btn.pack(pady=(0, 10), ipady=8)
         
     def toggle_random_interval(self):
         state = 'normal' if self.use_random_var.get() else 'disabled'
-        for child in self.random_frame.winfo_children():
-            if isinstance(child, tk.Entry):
-                child.config(state=state)
-                
+        for child in self.random_checkbox.winfo_children():
+            if isinstance(child, tk.Frame):
+                for subchild in child.winfo_children():
+                    if isinstance(subchild, tk.Entry):
+                        subchild.config(state=state)
+                        
     def toggle_fixed_pos(self):
         state = 'normal' if self.use_fixed_pos_var.get() else 'disabled'
-        for child in self.pos_frame.winfo_children():
-            if isinstance(child, (tk.Entry, tk.Button)):
-                child.config(state=state)
-                
+        for child in self.fixed_pos_checkbox.winfo_children():
+            if isinstance(child, tk.Frame):
+                for widget in child.winfo_children():
+                    if isinstance(widget, (tk.Entry, tk.Button)):
+                        widget.config(state=state)
+                        
     def pick_position(self):
         self.root.iconify()
         time.sleep(0.3)
@@ -711,224 +1025,7 @@ class Autoclicker:
     # ============== RECORDER TAB ==============
     def create_recorder_tab(self):
         tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text=" Recorder ")
-        
-        card = tk.Frame(tab, bg=self.colors['bg_light'], padx=20, pady=15)
-        card.pack(fill='both', expand=True, padx=10, pady=10)
-        
-        tk.Label(card, text="RECORDING OPTIONS", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
-        
-        self.record_movements_var = tk.BooleanVar(value=self.config['record_movements'])
-        self.create_checkbox(card, "Record mouse movements", self.record_movements_var)
-        
-        self.record_keyboard_var = tk.BooleanVar(value=self.config['record_keyboard'])
-        self.create_checkbox(card, "Record keyboard presses", self.record_keyboard_var)
-        
-        rec_status = tk.Frame(card, bg=self.colors['bg_light'])
-        rec_status.pack(fill='x', pady=10)
-        
-        self.rec_status_dot = tk.Label(rec_status, text="●", font=('Segoe UI', 14),
-                                       fg=self.colors['text_dim'], bg=self.colors['bg_light'])
-        self.rec_status_dot.pack(side='left')
-        
-        self.record_status_var = tk.StringVar(value="Ready to record")
-        tk.Label(rec_status, textvariable=self.record_status_var, font=('Segoe UI', 11),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=8)
-        
-        self.actions_var = tk.StringVar(value="0 actions")
-        tk.Label(rec_status, textvariable=self.actions_var, font=('Segoe UI', 10),
-                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
-        
-        rec_btns = tk.Frame(card, bg=self.colors['bg_light'])
-        rec_btns.pack(fill='x', pady=5)
-        
-        self.record_btn = self.create_button(rec_btns, "⏺ RECORD (F7)", self.toggle_recording, 'danger', 14)
-        self.record_btn.pack(side='left', ipady=5)
-        self.create_button(rec_btns, "Clear", self.clear_recording, 'default', 7).pack(side='left', padx=10, ipady=5)
-        
-        delay_add = tk.Frame(card, bg=self.colors['bg_light'])
-        delay_add.pack(fill='x', pady=8)
-        
-        self.manual_delay_var = tk.StringVar(value="1.0")
-        tk.Label(delay_add, text="Add delay:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(delay_add, textvariable=self.manual_delay_var, width=5,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        tk.Label(delay_add, text="s", font=('Segoe UI', 10),
-                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
-        self.create_button(delay_add, "+", self.add_manual_delay, 'default', 3).pack(side='left', padx=8, ipady=2)
-        
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
-        
-        tk.Label(card, text="PLAYBACK OPTIONS", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
-        
-        opt_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        opt_frame.pack(fill='x', pady=5)
-        
-        self.speed_var = tk.StringVar(value=str(self.config['playback_speed']))
-        tk.Label(opt_frame, text="Speed:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(opt_frame, textvariable=self.speed_var, width=5,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        tk.Label(opt_frame, text="×", font=('Segoe UI', 10),
-                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
-        
-        self.repeat_var = tk.StringVar(value=str(self.config['playback_repeat']))
-        tk.Label(opt_frame, text="Repeat:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(15, 0))
-        tk.Entry(opt_frame, textvariable=self.repeat_var, width=5,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        
-        self.loop_var = tk.BooleanVar(value=self.config['playback_loop'])
-        tk.Checkbutton(opt_frame, text="Loop", variable=self.loop_var,
-                      font=('Segoe UI', 10), fg=self.colors['text'],
-                      bg=self.colors['bg_light'], selectcolor=self.colors['bg_input']).pack(side='left', padx=15)
-        
-        play_status = tk.Frame(card, bg=self.colors['bg_light'])
-        play_status.pack(fill='x', pady=8)
-        
-        self.play_status_dot = tk.Label(play_status, text="●", font=('Segoe UI', 14),
-                                        fg=self.colors['text_dim'], bg=self.colors['bg_light'])
-        self.play_status_dot.pack(side='left')
-        
-        self.play_status_var = tk.StringVar(value="Stopped")
-        tk.Label(play_status, textvariable=self.play_status_var, font=('Segoe UI', 11),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=8)
-        
-        self.play_progress_var = tk.StringVar(value="")
-        tk.Label(play_status, textvariable=self.play_progress_var, font=('Segoe UI', 10),
-                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
-        
-        self.play_btn = self.create_button(card, "▶ PLAY (F8)", self.toggle_playback, 'success', 14)
-        self.play_btn.pack(anchor='w', ipady=5)
-        
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
-        
-        file_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        file_frame.pack(fill='x')
-        
-        self.create_button(file_frame, "💾 Save", self.save_recording, 'default', 9).pack(side='left', ipady=4)
-        self.create_button(file_frame, "📂 Load", self.load_recording, 'default', 9).pack(side='left', padx=10, ipady=4)
-        
-    def add_manual_delay(self):
-        try:
-            delay = float(self.manual_delay_var.get())
-            if delay > 0:
-                self.recorded_actions.append({'type': 'delay', 'time': delay})
-                self.update_actions_count()
-        except ValueError:
-            pass
-
-    # ============== MACRO TAB ==============
-    def create_macro_tab(self):
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text=" Keyboard Macro ")
-        
-        card = tk.Frame(tab, bg=self.colors['bg_light'], padx=20, pady=15)
-        card.pack(fill='both', expand=True, padx=10, pady=10)
-        
-        tk.Label(card, text="KEYBOARD MACRO RECORDER", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['purple'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
-        
-        macro_status = tk.Frame(card, bg=self.colors['bg_light'])
-        macro_status.pack(fill='x', pady=5)
-        
-        self.macro_status_dot = tk.Label(macro_status, text="●", font=('Segoe UI', 14),
-                                         fg=self.colors['text_dim'], bg=self.colors['bg_light'])
-        self.macro_status_dot.pack(side='left')
-        
-        self.macro_status_var = tk.StringVar(value="Ready")
-        tk.Label(macro_status, textvariable=self.macro_status_var, font=('Segoe UI', 11),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=8)
-        
-        self.macro_count_var = tk.StringVar(value="0 keys")
-        tk.Label(macro_status, textvariable=self.macro_count_var, font=('Segoe UI', 10),
-                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
-        
-        macro_btns = tk.Frame(card, bg=self.colors['bg_light'])
-        macro_btns.pack(fill='x', pady=8)
-        
-        self.macro_record_btn = self.create_button(macro_btns, "⏺ RECORD (F10)", self.toggle_macro_recording, 'purple', 14)
-        self.macro_record_btn.pack(side='left', ipady=5)
-        
-        self.macro_play_btn = self.create_button(macro_btns, "▶ PLAY (F11)", self.toggle_macro_playback, 'success', 12)
-        self.macro_play_btn.pack(side='left', padx=10, ipady=5)
-        
-        self.create_button(macro_btns, "Clear", self.clear_macro, 'default', 7).pack(side='left', ipady=5)
-        
-        opt_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        opt_frame.pack(fill='x', pady=8)
-        
-        self.macro_speed_var = tk.StringVar(value="1.0")
-        tk.Label(opt_frame, text="Speed:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(opt_frame, textvariable=self.macro_speed_var, width=5,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        
-        self.macro_repeat_var = tk.StringVar(value="1")
-        tk.Label(opt_frame, text="Repeat:", font=('Segoe UI', 10),
-                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(15, 0))
-        tk.Entry(opt_frame, textvariable=self.macro_repeat_var, width=5,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=3)
-        
-        self.macro_loop_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(opt_frame, text="Loop", variable=self.macro_loop_var,
-                      font=('Segoe UI', 10), fg=self.colors['text'],
-                      bg=self.colors['bg_light'], selectcolor=self.colors['bg_input']).pack(side='left', padx=15)
-        
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
-        
-        tk.Label(card, text="MACRO EDITOR", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['purple'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
-        
-        tk.Label(card, text="Commands: key(a), combo(ctrl+c), type(Hello), wait(0.5)",
-                font=('Segoe UI', 9), fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(anchor='w')
-        
-        self.macro_editor = scrolledtext.ScrolledText(card, height=5, width=50,
-                                                      font=('Consolas', 10), bg=self.colors['bg_input'],
-                                                      fg=self.colors['text'], insertbackground=self.colors['text'], relief='flat')
-        self.macro_editor.pack(fill='x', pady=5)
-        
-        editor_btns = tk.Frame(card, bg=self.colors['bg_light'])
-        editor_btns.pack(fill='x', pady=5)
-        
-        self.create_button(editor_btns, "▶ Run Script", self.run_macro_script, 'success', 12).pack(side='left', ipady=4)
-        self.create_button(editor_btns, "Import Recorded", self.import_recorded_to_editor, 'default', 13).pack(side='left', padx=10, ipady=4)
-        
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=10)
-        
-        tk.Label(card, text="SAVED MACROS", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['purple'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
-        
-        save_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        save_frame.pack(fill='x', pady=5)
-        
-        self.macro_name_var = tk.StringVar()
-        tk.Entry(save_frame, textvariable=self.macro_name_var, width=12,
-                font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', ipady=3)
-        
-        self.create_button(save_frame, "Save", self.save_macro, 'primary', 6).pack(side='left', padx=8, ipady=3)
-        
-        self.macro_list_var = tk.StringVar()
-        self.macro_combo = ttk.Combobox(save_frame, textvariable=self.macro_list_var,
-                                        values=list(self.saved_macros.keys()), state='readonly', width=10)
-        self.macro_combo.pack(side='left', padx=(10, 0))
-        
-        self.create_button(save_frame, "Load", self.load_macro, 'default', 5).pack(side='left', padx=5, ipady=3)
-        self.create_button(save_frame, "Del", self.delete_macro, 'danger', 4).pack(side='left', ipady=3)
-
-    # ============== SETTINGS TAB ==============
-    def create_settings_tab(self):
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text=" Settings ")
+        self.notebook.add(tab, text="  Recorder  ")
         
         canvas = tk.Canvas(tab, bg=self.colors['bg'], highlightthickness=0)
         scrollbar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
@@ -945,103 +1042,394 @@ class Autoclicker:
             canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
         canvas.bind_all('<MouseWheel>', on_mousewheel)
         
-        card = tk.Frame(scrollable, bg=self.colors['bg_light'], padx=20, pady=15)
-        card.pack(fill='x', padx=10, pady=10)
+        sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
+        sections_frame.pack(fill='x', pady=10)
         
-        # Hotkeys
-        tk.Label(card, text="HOTKEYS", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 10))
+        # Recording Options
+        record_card = self.create_section_card(sections_frame, "Recording Options")
+        record_card.pack(fill='x', padx=10, pady=(0, 10))
         
-        self.hotkey_vars = {
-            'autoclicker': tk.StringVar(value=self.config['hotkey_autoclicker']),
-            'record': tk.StringVar(value=self.config['hotkey_record']),
-            'playback': tk.StringVar(value=self.config['hotkey_playback']),
-            'hold': tk.StringVar(value=self.config['hotkey_hold']),
-            'macro_record': tk.StringVar(value=self.config['hotkey_macro_record']),
-            'macro_play': tk.StringVar(value=self.config['hotkey_macro_play'])
-        }
+        self.record_movements_check = self.create_checkbox(record_card, "Record mouse movements", 
+                                                          self.record_movements_var)
+        self.record_movements_check.pack(anchor='w', pady=5)
+        
+        self.record_keyboard_check = self.create_checkbox(record_card, "Record keyboard presses", 
+                                                         self.record_keyboard_var)
+        self.record_keyboard_check.pack(anchor='w', pady=5)
+        
+        # Status display
+        status_frame = tk.Frame(record_card, bg=self.colors['bg_light'])
+        status_frame.pack(fill='x', pady=15)
+        
+        self.rec_status_indicator = tk.Canvas(status_frame, width=14, height=14, 
+                                            bg=self.colors['bg_light'], highlightthickness=0)
+        self.rec_status_indicator.pack(side='left', padx=(0, 10))
+        self.rec_status_indicator.create_oval(3, 3, 11, 11, fill=self.colors['text_dim'], outline='')
+        
+        tk.Label(status_frame, textvariable=self.record_status_var,
+                font=('Segoe UI', 11),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
+        
+        tk.Label(status_frame, textvariable=self.actions_var,
+                font=('Segoe UI', 10),
+                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
+        
+        # Control buttons
+        control_frame = tk.Frame(record_card, bg=self.colors['bg_light'])
+        control_frame.pack(fill='x', pady=(0, 10))
+        
+        self.record_btn = self.create_button(control_frame, "⏺ RECORD (F7)", 
+                                           self.toggle_recording, 'danger', 12)
+        self.record_btn.pack(side='left', padx=(0, 10))
+        
+        self.create_button(control_frame, "Clear", self.clear_recording, 'secondary', 8).pack(side='left')
+        
+        # Manual delay
+        delay_frame = tk.Frame(record_card, bg=self.colors['bg_light'])
+        delay_frame.pack(anchor='w', pady=10)
+        
+        tk.Label(delay_frame, text="Add delay:", font=('Segoe UI', 10),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
+        tk.Entry(delay_frame, textvariable=self.manual_delay_var, width=6,
+                font=('Segoe UI', 10), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        tk.Label(delay_frame, text="s", font=('Segoe UI', 10),
+                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
+        self.create_button(delay_frame, "+", self.add_manual_delay, 'secondary', 3).pack(side='left', padx=8)
+        
+        # Playback Options
+        playback_card = self.create_section_card(sections_frame, "Playback Options")
+        playback_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        # Speed and repeat
+        speed_frame = tk.Frame(playback_card, bg=self.colors['bg_light'])
+        speed_frame.pack(anchor='w', pady=5)
+        
+        tk.Label(speed_frame, text="Speed:", font=('Segoe UI', 10),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
+        tk.Entry(speed_frame, textvariable=self.speed_var, width=6,
+                font=('Segoe UI', 10), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        
+        tk.Label(speed_frame, text="Repeat:", font=('Segoe UI', 10),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(15, 0))
+        tk.Entry(speed_frame, textvariable=self.repeat_var, width=6,
+                font=('Segoe UI', 10), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        
+        self.loop_check = self.create_checkbox(playback_card, "Loop playback", self.loop_var)
+        self.loop_check.pack(anchor='w', pady=5)
+        
+        # Playback status
+        play_status_frame = tk.Frame(playback_card, bg=self.colors['bg_light'])
+        play_status_frame.pack(fill='x', pady=10)
+        
+        self.play_status_indicator = tk.Canvas(play_status_frame, width=14, height=14, 
+                                             bg=self.colors['bg_light'], highlightthickness=0)
+        self.play_status_indicator.pack(side='left', padx=(0, 10))
+        self.play_status_indicator.create_oval(3, 3, 11, 11, fill=self.colors['text_dim'], outline='')
+        
+        tk.Label(play_status_frame, textvariable=self.play_status_var,
+                font=('Segoe UI', 11),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
+        
+        tk.Label(play_status_frame, textvariable=self.play_progress_var,
+                font=('Segoe UI', 10),
+                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
+        
+        # Playback button
+        self.play_btn = self.create_button(playback_card, "▶ PLAY RECORDING (F8)", 
+                                         self.toggle_playback, 'success', 20)
+        self.play_btn.pack(pady=(0, 10), ipady=6)
+        
+        # File operations
+        file_card = self.create_section_card(sections_frame, "File Operations")
+        file_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        file_frame = tk.Frame(file_card, bg=self.colors['bg_light'])
+        file_frame.pack(pady=10)
+        
+        self.create_button(file_frame, "💾 Save Recording", self.save_recording, 'primary', 15).pack(side='left', padx=(0, 10))
+        self.create_button(file_frame, "📂 Load Recording", self.load_recording, 'primary', 15).pack(side='left')
+        
+    def add_manual_delay(self):
+        try:
+            delay = float(self.manual_delay_var.get())
+            if delay > 0:
+                self.recorded_actions.append({'type': 'delay', 'time': delay})
+                self.update_actions_count()
+        except ValueError:
+            pass
+
+    # ============== SAVE AND LOAD RECORDING METHODS ==============
+    def save_recording(self):
+        """Save current recording to a file"""
+        if not self.recorded_actions:
+            messagebox.showinfo("No Recording", "No recording to save!")
+            return
+            
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Save Recording"
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w') as f:
+                    json.dump(self.recorded_actions, f, indent=2)
+                messagebox.showinfo("Success", f"Recording saved to {os.path.basename(file_path)}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save: {str(e)}")
+                
+    def load_recording(self):
+        """Load a recording from a file"""
+        file_path = filedialog.askopenfilename(
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Load Recording"
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'r') as f:
+                    self.recorded_actions = json.load(f)
+                self.update_actions_count()
+                self.record_status_var.set(f"Loaded {len(self.recorded_actions)} actions")
+                messagebox.showinfo("Success", f"Recording loaded: {os.path.basename(file_path)}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load: {str(e)}")
+
+    # ============== MACRO TAB ==============
+    def create_macro_tab(self):
+        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
+        self.notebook.add(tab, text="  Macro  ")
+        
+        canvas = tk.Canvas(tab, bg=self.colors['bg'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
+        scrollable = tk.Frame(canvas, bg=self.colors['bg'])
+        
+        scrollable.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.create_window((0, 0), window=scrollable, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
+        canvas.bind_all('<MouseWheel>', on_mousewheel)
+        
+        sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
+        sections_frame.pack(fill='x', pady=10)
+        
+        # Macro Recorder
+        macro_card = self.create_section_card(sections_frame, "Keyboard Macro Recorder")
+        macro_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        # Status display
+        macro_status_frame = tk.Frame(macro_card, bg=self.colors['bg_light'])
+        macro_status_frame.pack(fill='x', pady=10)
+        
+        self.macro_status_indicator = tk.Canvas(macro_status_frame, width=14, height=14, 
+                                               bg=self.colors['bg_light'], highlightthickness=0)
+        self.macro_status_indicator.pack(side='left', padx=(0, 10))
+        self.macro_status_indicator.create_oval(3, 3, 11, 11, fill=self.colors['text_dim'], outline='')
+        
+        tk.Label(macro_status_frame, textvariable=self.macro_status_var,
+                font=('Segoe UI', 11),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
+        
+        tk.Label(macro_status_frame, textvariable=self.macro_count_var,
+                font=('Segoe UI', 10),
+                fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='right')
+        
+        # Control buttons
+        macro_control_frame = tk.Frame(macro_card, bg=self.colors['bg_light'])
+        macro_control_frame.pack(fill='x', pady=(0, 10))
+        
+        self.macro_record_btn = self.create_button(macro_control_frame, "⏺ RECORD MACRO (F10)", 
+                                                  self.toggle_macro_recording, 'purple', 15)
+        self.macro_record_btn.pack(side='left', padx=(0, 10))
+        
+        self.macro_play_btn = self.create_button(macro_control_frame, "▶ PLAY MACRO (F11)", 
+                                                self.toggle_macro_playback, 'success', 13)
+        self.macro_play_btn.pack(side='left', padx=(0, 10))
+        
+        self.create_button(macro_control_frame, "Clear", self.clear_macro, 'secondary', 8).pack(side='left')
+        
+        # Macro Options
+        macro_options_frame = tk.Frame(macro_card, bg=self.colors['bg_light'])
+        macro_options_frame.pack(anchor='w', pady=10)
+        
+        tk.Label(macro_options_frame, text="Speed:", font=('Segoe UI', 10),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
+        tk.Entry(macro_options_frame, textvariable=self.macro_speed_var, width=6,
+                font=('Segoe UI', 10), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        
+        tk.Label(macro_options_frame, text="Repeat:", font=('Segoe UI', 10),
+                fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(15, 0))
+        tk.Entry(macro_options_frame, textvariable=self.macro_repeat_var, width=6,
+                font=('Segoe UI', 10), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+        
+        self.macro_loop_check = self.create_checkbox(macro_options_frame, "Loop macro", self.macro_loop_var)
+        self.macro_loop_check.pack(side='left', padx=(15, 0))
+        
+        # Macro Editor
+        editor_card = self.create_section_card(sections_frame, "Macro Editor")
+        editor_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        tk.Label(editor_card, text="Commands: key(a), combo(ctrl+c), type(Hello), wait(0.5)",
+                font=('Segoe UI', 9), fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 5))
+        
+        self.macro_editor = scrolledtext.ScrolledText(editor_card, height=6, width=50,
+                                                     font=('Consolas', 10), bg=self.colors['bg_input'],
+                                                     fg=self.colors['text'], insertbackground=self.colors['text'], 
+                                                     relief='flat', bd=0)
+        self.macro_editor.pack(fill='x', pady=5)
+        
+        editor_btns = tk.Frame(editor_card, bg=self.colors['bg_light'])
+        editor_btns.pack(pady=10)
+        
+        self.create_button(editor_btns, "▶ Run Script", self.run_macro_script, 'success', 12).pack(side='left', padx=(0, 10))
+        self.create_button(editor_btns, "Import Recorded", self.import_recorded_to_editor, 'secondary', 13).pack(side='left')
+        
+        # Saved Macros
+        saved_card = self.create_section_card(sections_frame, "Saved Macros")
+        saved_card.pack(fill='x', padx=10, pady=(0, 10))
+        
+        save_frame = tk.Frame(saved_card, bg=self.colors['bg_light'])
+        save_frame.pack(fill='x', pady=10)
+        
+        tk.Entry(save_frame, textvariable=self.macro_name_var, width=15,
+                font=('Segoe UI', 10), bg=self.colors['bg_input'],
+                fg=self.colors['text'], relief='flat').pack(side='left', ipady=3)
+        
+        self.create_button(save_frame, "Save", self.save_macro, 'primary', 6).pack(side='left', padx=10, ipady=3)
+        
+        self.macro_combo = ttk.Combobox(save_frame, textvariable=self.macro_list_var,
+                                        values=list(self.saved_macros.keys()), 
+                                        state='readonly', width=12,
+                                        style='Custom.TCombobox')
+        self.macro_combo.pack(side='left', padx=(10, 0))
+        
+        self.create_button(save_frame, "Load", self.load_macro, 'secondary', 5).pack(side='left', padx=5, ipady=3)
+        self.create_button(save_frame, "Delete", self.delete_macro, 'danger', 6).pack(side='left', ipady=3)
+
+    # ============== SETTINGS TAB ==============
+    def create_settings_tab(self):
+        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
+        self.notebook.add(tab, text="  Settings  ")
+        
+        canvas = tk.Canvas(tab, bg=self.colors['bg'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
+        scrollable = tk.Frame(canvas, bg=self.colors['bg'])
+        
+        scrollable.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.create_window((0, 0), window=scrollable, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
+        canvas.bind_all('<MouseWheel>', on_mousewheel)
+        
+        sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
+        sections_frame.pack(fill='x', pady=10)
+        
+        # Hotkeys Section
+        hotkeys_card = self.create_section_card(sections_frame, "Hotkeys")
+        hotkeys_card.pack(fill='x', padx=10, pady=(0, 10))
         
         self.hotkey_buttons = {}
         for name, label in [('autoclicker', 'Autoclicker'), ('record', 'Record Mouse'),
                            ('playback', 'Playback'), ('hold', 'Hold-to-click'),
                            ('macro_record', 'Record Macro'), ('macro_play', 'Play Macro')]:
-            row = tk.Frame(card, bg=self.colors['bg_light'])
-            row.pack(fill='x', pady=4)
+            row = tk.Frame(hotkeys_card, bg=self.colors['bg_light'])
+            row.pack(fill='x', pady=6)
             tk.Label(row, text=label, font=('Segoe UI', 10), fg=self.colors['text'],
-                    bg=self.colors['bg_light'], width=14, anchor='w').pack(side='left')
+                    bg=self.colors['bg_light'], width=18, anchor='w').pack(side='left')
             btn = tk.Button(row, text=self.format_key(self.hotkey_vars[name].get()),
                            font=('Segoe UI', 10), bg=self.colors['bg_input'], fg=self.colors['text'],
-                           relief='flat', width=10, cursor='hand2', command=lambda n=name: self.capture_hotkey(n))
+                           relief='flat', width=12, cursor='hand2', 
+                           command=lambda n=name: self.capture_hotkey(n))
             btn.pack(side='right', ipady=2)
             self.hotkey_buttons[name] = btn
             
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=15)
+        # Appearance Section
+        appearance_card = self.create_section_card(sections_frame, "Appearance")
+        appearance_card.pack(fill='x', padx=10, pady=(0, 10))
         
-        # Appearance
-        tk.Label(card, text="APPEARANCE", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 10))
-        
-        theme_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        theme_frame.pack(fill='x', pady=5)
+        theme_frame = tk.Frame(appearance_card, bg=self.colors['bg_light'])
+        theme_frame.pack(anchor='w', pady=10)
         
         tk.Label(theme_frame, text="Theme:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
         
-        self.theme_var = tk.StringVar(value=self.config['theme'])
         for theme in ['dark', 'light']:
-            rb = tk.Radiobutton(theme_frame, text=theme.capitalize(), variable=self.theme_var, value=theme,
-                               font=('Segoe UI', 10), fg=self.colors['text'], bg=self.colors['bg_light'],
-                               selectcolor=self.colors['bg_input'], command=self.change_theme)
-            rb.pack(side='left', padx=10)
+            rb = tk.Radiobutton(theme_frame, text=theme.capitalize(), 
+                               variable=self.theme_var, value=theme,
+                               font=('Segoe UI', 10), 
+                               fg=self.colors['text'], 
+                               bg=self.colors['bg_light'],
+                               selectcolor=self.colors['accent'],
+                               command=self.change_theme)
+            rb.pack(side='left', padx=15)
             
-        self.always_on_top_var = tk.BooleanVar(value=self.config['always_on_top'])
-        self.create_checkbox(card, "Always on top", self.always_on_top_var, self.toggle_always_on_top)
+        self.always_on_top_check = self.create_checkbox(appearance_card, "Always on top", 
+                                                       self.always_on_top_var, 
+                                                       self.toggle_always_on_top)
+        self.always_on_top_check.pack(anchor='w', pady=5)
         
         if HAS_TRAY:
-            self.minimize_tray_var = tk.BooleanVar(value=self.config['minimize_to_tray'])
-            self.create_checkbox(card, "Minimize to system tray", self.minimize_tray_var)
+            self.minimize_tray_check = self.create_checkbox(appearance_card, "Minimize to system tray", 
+                                                           self.minimize_tray_var)
+            self.minimize_tray_check.pack(anchor='w', pady=5)
             
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=15)
-        
-        # License
-        tk.Label(card, text="LICENSE", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 10))
+        # License Section
+        license_card = self.create_section_card(sections_frame, "License")
+        license_card.pack(fill='x', padx=10, pady=(0, 10))
         
         key_system = KeySystem()
-        tk.Label(card, text=f"Key: {key_system.saved_key or 'Not activated'}",
-                font=('Segoe UI', 10), fg=self.colors['text'], bg=self.colors['bg_light']).pack(anchor='w')
-        tk.Label(card, text=f"HWID: {key_system.hwid[:20]}...",
-                font=('Segoe UI', 9), fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(anchor='w')
+        tk.Label(license_card, text=f"Status: {'✅ Activated' if key_system.saved_key else '❌ Not activated'}",
+                font=('Segoe UI', 10), fg=self.colors['text'], bg=self.colors['bg_light']).pack(anchor='w', pady=5)
         
-        self.create_button(card, "Deactivate License", self.deactivate_license, 'danger', 16).pack(anchor='w', pady=10, ipady=4)
+        if key_system.saved_key:
+            tk.Label(license_card, text=f"Key: {key_system.saved_key}",
+                    font=('Consolas', 9), fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(anchor='w', pady=2)
         
-        tk.Frame(card, bg=self.colors['border'], height=1).pack(fill='x', pady=15)
+        tk.Label(license_card, text=f"HWID: {key_system.hwid[:20]}...",
+                font=('Consolas', 8), fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(anchor='w', pady=2)
         
-        # Profiles
-        tk.Label(card, text="PROFILES", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 10))
+        self.create_button(license_card, "Deactivate License", self.deactivate_license, 'danger', 18).pack(anchor='w', pady=10)
         
-        profile_frame = tk.Frame(card, bg=self.colors['bg_light'])
-        profile_frame.pack(fill='x', pady=5)
+        # Profiles Section
+        profiles_card = self.create_section_card(sections_frame, "Profiles")
+        profiles_card.pack(fill='x', padx=10, pady=(0, 10))
         
-        self.profile_var = tk.StringVar(value="default")
+        profile_frame = tk.Frame(profiles_card, bg=self.colors['bg_light'])
+        profile_frame.pack(fill='x', pady=10)
+        
         self.profile_combo = ttk.Combobox(profile_frame, textvariable=self.profile_var,
                                           values=list(self.profiles.keys()) if self.profiles else ['default'],
-                                          state='readonly', width=12)
+                                          state='readonly', width=15,
+                                          style='Custom.TCombobox')
         self.profile_combo.pack(side='left')
         
-        self.create_button(profile_frame, "Load", self.load_profile, 'default', 6).pack(side='left', padx=5, ipady=2)
-        self.create_button(profile_frame, "Save", self.save_profile, 'default', 6).pack(side='left', ipady=2)
-        self.create_button(profile_frame, "Del", self.delete_profile, 'danger', 4).pack(side='left', padx=5, ipady=2)
+        self.create_button(profile_frame, "Load", self.load_profile, 'secondary', 6).pack(side='left', padx=5, ipady=2)
+        self.create_button(profile_frame, "Save", self.save_profile, 'secondary', 6).pack(side='left', ipady=2)
+        self.create_button(profile_frame, "Delete", self.delete_profile, 'danger', 6).pack(side='left', padx=5, ipady=2)
         
-        new_profile = tk.Frame(card, bg=self.colors['bg_light'])
-        new_profile.pack(fill='x', pady=5)
+        new_profile_frame = tk.Frame(profiles_card, bg=self.colors['bg_light'])
+        new_profile_frame.pack(fill='x', pady=(0, 10))
         
-        self.new_profile_var = tk.StringVar()
-        tk.Entry(new_profile, textvariable=self.new_profile_var, width=12,
+        tk.Entry(new_profile_frame, textvariable=self.new_profile_var, width=15,
                 font=('Segoe UI', 10), bg=self.colors['bg_input'],
                 fg=self.colors['text'], relief='flat').pack(side='left', ipady=3)
-        self.create_button(new_profile, "Create", self.create_profile, 'primary', 8).pack(side='left', padx=10, ipady=2)
+        self.create_button(new_profile_frame, "Create New", self.create_profile, 'primary', 10).pack(side='left', padx=10, ipady=2)
         
     def deactivate_license(self):
         if messagebox.askyesno("Deactivate", "Remove license from this device?\nYou'll need to re-enter your key."):
@@ -1052,26 +1440,68 @@ class Autoclicker:
     # ============== STATS TAB ==============
     def create_stats_tab(self):
         tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text=" Stats ")
+        self.notebook.add(tab, text="  Statistics  ")
         
-        card = tk.Frame(tab, bg=self.colors['bg_light'], padx=20, pady=20)
-        card.pack(fill='both', expand=True, padx=10, pady=10)
+        canvas = tk.Canvas(tab, bg=self.colors['bg'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
+        scrollable = tk.Frame(canvas, bg=self.colors['bg'])
         
-        tk.Label(card, text="SESSION STATISTICS", font=('Segoe UI', 9, 'bold'),
-                fg=self.colors['accent'], bg=self.colors['bg_light']).pack(anchor='w', pady=(0, 15))
+        scrollable.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.create_window((0, 0), window=scrollable, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
+        canvas.bind_all('<MouseWheel>', on_mousewheel)
+        
+        sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
+        sections_frame.pack(fill='x', pady=10)
+        
+        # Statistics Card
+        stats_card = self.create_section_card(sections_frame, "Session Statistics")
+        stats_card.pack(fill='x', padx=10, pady=(0, 10))
         
         self.stat_labels = {}
-        for stat_id, label in [('session_clicks', 'Session Clicks'), ('total_clicks', 'Total Clicks'),
-                               ('session_time', 'Session Duration'), ('recordings_played', 'Recordings Played'),
-                               ('macros_played', 'Macros Played')]:
-            row = tk.Frame(card, bg=self.colors['bg_light'])
-            row.pack(fill='x', pady=8)
-            tk.Label(row, text=label, font=('Segoe UI', 11), fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-            val_label = tk.Label(row, text="0", font=('Segoe UI', 11, 'bold'), fg=self.colors['accent'], bg=self.colors['bg_light'])
+        stats_grid = tk.Frame(stats_card, bg=self.colors['bg_light'])
+        stats_grid.pack(fill='x', pady=20)
+        
+        # Create stats in two columns
+        left_col = tk.Frame(stats_grid, bg=self.colors['bg_light'])
+        left_col.pack(side='left', fill='both', expand=True, padx=20)
+        
+        right_col = tk.Frame(stats_grid, bg=self.colors['bg_light'])
+        right_col.pack(side='right', fill='both', expand=True, padx=20)
+        
+        stat_items = [
+            ('session_clicks', 'Session Clicks', left_col),
+            ('total_clicks', 'Total Clicks', left_col),
+            ('session_time', 'Session Duration', left_col),
+            ('recordings_played', 'Recordings Played', right_col),
+            ('macros_played', 'Macros Played', right_col)
+        ]
+        
+        for stat_id, label, column in stat_items:
+            frame = tk.Frame(column, bg=self.colors['bg_light'])
+            frame.pack(fill='x', pady=12)
+            
+            tk.Label(frame, text=label, font=('Segoe UI', 11), 
+                    fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
+            
+            val_label = tk.Label(frame, text="0", font=('Segoe UI', 14, 'bold'), 
+                                fg=self.colors['accent'], bg=self.colors['bg_light'])
             val_label.pack(side='right')
             self.stat_labels[stat_id] = val_label
-            
-        self.create_button(card, "Reset Session", self.reset_session_stats, 'danger', 15).pack(pady=20, ipady=5)
+        
+        # Control button
+        control_frame = tk.Frame(stats_card, bg=self.colors['bg_light'])
+        control_frame.pack(pady=20)
+        
+        self.create_button(control_frame, "🔄 Reset Session Statistics", 
+                         self.reset_session_stats, 'danger', 22).pack(ipady=6)
+        
         self.update_stats_display()
         
     def update_stats_display(self):
@@ -1130,7 +1560,7 @@ class Autoclicker:
         
         if hasattr(self, 'auto_toggle_btn'):
             key = self.format_key(self.hotkey_vars['autoclicker'].get())
-            self.auto_toggle_btn.config(text=f"▶ START ({key})")
+            self.auto_toggle_btn.config(text=f"▶ START AUTOCLICKER ({key})")
             
     def format_key(self, key):
         return key.replace('Key.', '').upper() if key.startswith('Key.') else key.upper()
@@ -1162,7 +1592,7 @@ class Autoclicker:
         
     def stop_hold_clicking(self):
         self.clicking = False
-        self.update_status("Idle", self.colors['text_dim'])
+        self.update_status("Ready", self.colors['text'])
 
     # ============== AUTOCLICKER LOGIC ==============
     def toggle_autoclicker(self):
@@ -1195,9 +1625,9 @@ class Autoclicker:
         if not self.stats['session_start']: self.stats['session_start'] = time.time()
             
         key = self.format_key(self.hotkey_vars['autoclicker'].get())
-        self.auto_toggle_btn.config(text=f"⏹ STOP ({key})", bg=self.colors['danger'])
+        self.auto_toggle_btn.config(text=f"⏹ STOP AUTOCLICKER ({key})", bg=self.colors['danger'])
         self.update_status("Running", self.colors['success'])
-        self.auto_status_dot.config(fg=self.colors['success'])
+        self.update_auto_status_indicator(self.colors['success'])
         self.auto_status_var.set("Running")
         
         threading.Thread(target=self._autoclicker_with_delay, daemon=True).start()
@@ -1225,10 +1655,14 @@ class Autoclicker:
     def stop_autoclicker(self):
         self.clicking = False
         key = self.format_key(self.hotkey_vars['autoclicker'].get())
-        self.auto_toggle_btn.config(text=f"▶ START ({key})", bg=self.colors['success'])
-        self.update_status("Idle", self.colors['text_dim'])
-        self.auto_status_dot.config(fg=self.colors['text_dim'])
-        self.auto_status_var.set("Stopped")
+        self.auto_toggle_btn.config(text=f"▶ START AUTOCLICKER ({key})", bg=self.colors['success'])
+        self.update_status("Ready", self.colors['text'])
+        self.update_auto_status_indicator(self.colors['text_dim'])
+        self.auto_status_var.set("Ready")
+        
+    def update_auto_status_indicator(self, color):
+        self.auto_status_indicator.delete("all")
+        self.auto_status_indicator.create_oval(4, 4, 12, 12, fill=color, outline='')
 
     # ============== RECORDING LOGIC ==============
     def toggle_recording(self):
@@ -1243,8 +1677,8 @@ class Autoclicker:
         self.last_action_time = 0
         
         self.record_status_var.set("Recording...")
-        self.rec_status_dot.config(fg=self.colors['danger'])
-        self.record_btn.config(text="⏹ STOP (F7)", bg=self.colors['warning'])
+        self.update_rec_status_indicator(self.colors['danger'])
+        self.record_btn.config(text="⏹ STOP RECORDING (F7)", bg=self.colors['warning'])
         self.update_status("Recording", self.colors['danger'])
         self.update_actions_count()
         
@@ -1280,9 +1714,9 @@ class Autoclicker:
     def stop_recording(self):
         self.recording = False
         self.record_status_var.set(f"Recorded {len(self.recorded_actions)} actions")
-        self.rec_status_dot.config(fg=self.colors['text_dim'])
+        self.update_rec_status_indicator(self.colors['text_dim'])
         self.record_btn.config(text="⏺ RECORD (F7)", bg=self.colors['danger'])
-        self.update_status("Idle", self.colors['text_dim'])
+        self.update_status("Ready", self.colors['text'])
         if hasattr(self, 'mouse_rec_listener'): self.mouse_rec_listener.stop()
         if hasattr(self, 'kb_rec_listener'): self.kb_rec_listener.stop()
             
@@ -1294,6 +1728,10 @@ class Autoclicker:
         
     def update_actions_count(self):
         self.actions_var.set(f"{len(self.recorded_actions)} actions")
+        
+    def update_rec_status_indicator(self, color):
+        self.rec_status_indicator.delete("all")
+        self.rec_status_indicator.create_oval(3, 3, 11, 11, fill=color, outline='')
 
     # ============== PLAYBACK LOGIC ==============
     def toggle_playback(self):
@@ -1315,8 +1753,8 @@ class Autoclicker:
         self.playing = True
         
         self.play_status_var.set("Playing...")
-        self.play_status_dot.config(fg=self.colors['success'])
-        self.play_btn.config(text="⏹ STOP (F8)", bg=self.colors['danger'])
+        self.update_play_status_indicator(self.colors['success'])
+        self.play_btn.config(text="⏹ STOP PLAYBACK (F8)", bg=self.colors['danger'])
         self.update_status("Playing", self.colors['success'])
         
         threading.Thread(target=self._playback_loop, daemon=True).start()
@@ -1361,13 +1799,17 @@ class Autoclicker:
         
     def _playback_finished(self):
         self.play_status_var.set("Stopped")
-        self.play_status_dot.config(fg=self.colors['text_dim'])
-        self.play_btn.config(text="▶ PLAY (F8)", bg=self.colors['success'])
+        self.update_play_status_indicator(self.colors['text_dim'])
+        self.play_btn.config(text="▶ PLAY RECORDING (F8)", bg=self.colors['success'])
         self.play_progress_var.set("")
-        self.update_status("Idle", self.colors['text_dim'])
+        self.update_status("Ready", self.colors['text'])
         
     def stop_playback(self):
         self.playing = False
+        
+    def update_play_status_indicator(self, color):
+        self.play_status_indicator.delete("all")
+        self.play_status_indicator.create_oval(3, 3, 11, 11, fill=color, outline='')
 
     # ============== MACRO LOGIC ==============
     def toggle_macro_recording(self):
@@ -1381,8 +1823,8 @@ class Autoclicker:
         self.macro_start_time = time.time()
         
         self.macro_status_var.set("Recording...")
-        self.macro_status_dot.config(fg=self.colors['danger'])
-        self.macro_record_btn.config(text="⏹ STOP (F10)", bg=self.colors['warning'])
+        self.update_macro_status_indicator(self.colors['danger'])
+        self.macro_record_btn.config(text="⏹ STOP RECORDING (F10)", bg=self.colors['warning'])
         self.update_status("Recording Macro", self.colors['purple'])
         self.update_macro_count()
         
@@ -1406,9 +1848,9 @@ class Autoclicker:
         self.macro_recording = False
         if hasattr(self, 'macro_kb_listener'): self.macro_kb_listener.stop()
         self.macro_status_var.set(f"Recorded {len(self.macro_actions)} actions")
-        self.macro_status_dot.config(fg=self.colors['text_dim'])
-        self.macro_record_btn.config(text="⏺ RECORD (F10)", bg=self.colors['purple'])
-        self.update_status("Idle", self.colors['text_dim'])
+        self.update_macro_status_indicator(self.colors['text_dim'])
+        self.macro_record_btn.config(text="⏺ RECORD MACRO (F10)", bg=self.colors['purple'])
+        self.update_status("Ready", self.colors['text'])
         
     def toggle_macro_playback(self):
         if self.macro_playing: self.stop_macro_playback()
@@ -1429,7 +1871,7 @@ class Autoclicker:
         self.macro_playing = True
         
         self.macro_status_var.set("Playing...")
-        self.macro_status_dot.config(fg=self.colors['success'])
+        self.update_macro_status_indicator(self.colors['success'])
         self.macro_play_btn.config(text="⏹ STOP", bg=self.colors['danger'])
         self.update_status("Playing Macro", self.colors['success'])
         
@@ -1461,9 +1903,9 @@ class Autoclicker:
         
     def _macro_playback_finished(self):
         self.macro_status_var.set("Stopped")
-        self.macro_status_dot.config(fg=self.colors['text_dim'])
-        self.macro_play_btn.config(text="▶ PLAY (F11)", bg=self.colors['success'])
-        self.update_status("Idle", self.colors['text_dim'])
+        self.update_macro_status_indicator(self.colors['text_dim'])
+        self.macro_play_btn.config(text="▶ PLAY MACRO (F11)", bg=self.colors['success'])
+        self.update_status("Ready", self.colors['text'])
         
     def stop_macro_playback(self):
         self.macro_playing = False
@@ -1476,6 +1918,10 @@ class Autoclicker:
         
     def update_macro_count(self):
         self.macro_count_var.set(f"{len(self.macro_actions)} actions")
+        
+    def update_macro_status_indicator(self, color):
+        self.macro_status_indicator.delete("all")
+        self.macro_status_indicator.create_oval(3, 3, 11, 11, fill=color, outline='')
         
     def run_macro_script(self):
         script = self.macro_editor.get("1.0", tk.END).strip()
@@ -1500,7 +1946,7 @@ class Autoclicker:
                     time.sleep(float(line[5:-1]))
             except: pass
         self.macro_playing = False
-        self.root.after(0, lambda: self.update_status("Idle", self.colors['text_dim']))
+        self.root.after(0, lambda: self.update_status("Ready", self.colors['text']))
         
     def _get_key(self, key_name):
         key_map = {'ctrl': Key.ctrl, 'alt': Key.alt, 'shift': Key.shift, 'win': Key.cmd,
@@ -1663,8 +2109,11 @@ class Autoclicker:
         if HAS_TRAY and hasattr(self, 'minimize_tray_var') and self.minimize_tray_var.get(): self.root.withdraw()
         else: self.root.iconify()
             
-    def update_status(self, text, color):
-        self.header_status.config(text=f"● {text}")
+    def update_status(self, text, color=None):
+        self.status_label.config(text=text)
+        if color:
+            self.status_indicator.delete("all")
+            self.status_indicator.create_oval(2, 2, 10, 10, fill=color, outline='')
         
     def on_close(self):
         self.save_config()
