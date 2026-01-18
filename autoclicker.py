@@ -475,10 +475,9 @@ class Autoclicker:
         self.load_config()
         self.colors = THEMES[self.config['theme']]
         
-        # Initialize all tkinter variables
-        self.initialize_tk_variables()
-        
+        # Setup GUI (this now includes variable initialization)
         self.setup_gui()
+        
         self.setup_hotkeys()
         self.load_profiles()
         self.load_saved_macros()
@@ -555,6 +554,9 @@ class Autoclicker:
             self.root.attributes('-topmost', True)
             
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # IMPORTANT: Initialize tkinter variables AFTER root exists but BEFORE creating widgets
+        self.initialize_tk_variables()
         
         # Custom styles
         self.setup_styles()
@@ -869,14 +871,16 @@ class Autoclicker:
         
         tk.Label(random_range_frame, text="Min:", font=('Segoe UI', 9),
                 fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(random_range_frame, textvariable=self.random_min_var, width=6,
+        self.random_min_entry = tk.Entry(random_range_frame, textvariable=self.random_min_var, width=6,
                 font=('Segoe UI', 9), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+                fg=self.colors['text'], relief='flat')
+        self.random_min_entry.pack(side='left', padx=5, ipady=2)
         tk.Label(random_range_frame, text="Max:", font=('Segoe UI', 9),
                 fg=self.colors['text_dim'], bg=self.colors['bg_light']).pack(side='left', padx=(10, 0))
-        tk.Entry(random_range_frame, textvariable=self.random_max_var, width=6,
+        self.random_max_entry = tk.Entry(random_range_frame, textvariable=self.random_max_var, width=6,
                 font=('Segoe UI', 9), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+                fg=self.colors['text'], relief='flat')
+        self.random_max_entry.pack(side='left', padx=5, ipady=2)
         
         self.toggle_random_interval()
         
@@ -938,14 +942,16 @@ class Autoclicker:
         
         tk.Label(pos_input_frame, text="X:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left')
-        tk.Entry(pos_input_frame, textvariable=self.fixed_x_var, width=6,
+        self.fixed_x_entry = tk.Entry(pos_input_frame, textvariable=self.fixed_x_var, width=6,
                 font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+                fg=self.colors['text'], relief='flat')
+        self.fixed_x_entry.pack(side='left', padx=5, ipady=2)
         tk.Label(pos_input_frame, text="Y:", font=('Segoe UI', 10),
                 fg=self.colors['text'], bg=self.colors['bg_light']).pack(side='left', padx=(10, 0))
-        tk.Entry(pos_input_frame, textvariable=self.fixed_y_var, width=6,
+        self.fixed_y_entry = tk.Entry(pos_input_frame, textvariable=self.fixed_y_var, width=6,
                 font=('Segoe UI', 10), bg=self.colors['bg_input'],
-                fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
+                fg=self.colors['text'], relief='flat')
+        self.fixed_y_entry.pack(side='left', padx=5, ipady=2)
         
         self.pick_pos_btn = self.create_button(pos_input_frame, "Pick Position", 
                                              self.pick_position, 'secondary', 12)
@@ -996,19 +1002,19 @@ class Autoclicker:
         
     def toggle_random_interval(self):
         state = 'normal' if self.use_random_var.get() else 'disabled'
-        for child in self.random_checkbox.winfo_children():
-            if isinstance(child, tk.Frame):
-                for subchild in child.winfo_children():
-                    if isinstance(subchild, tk.Entry):
-                        subchild.config(state=state)
+        if hasattr(self, 'random_min_entry'):
+            self.random_min_entry.config(state=state)
+        if hasattr(self, 'random_max_entry'):
+            self.random_max_entry.config(state=state)
                         
     def toggle_fixed_pos(self):
         state = 'normal' if self.use_fixed_pos_var.get() else 'disabled'
-        for child in self.fixed_pos_checkbox.winfo_children():
-            if isinstance(child, tk.Frame):
-                for widget in child.winfo_children():
-                    if isinstance(widget, (tk.Entry, tk.Button)):
-                        widget.config(state=state)
+        if hasattr(self, 'fixed_x_entry'):
+            self.fixed_x_entry.config(state=state)
+        if hasattr(self, 'fixed_y_entry'):
+            self.fixed_y_entry.config(state=state)
+        if hasattr(self, 'pick_pos_btn'):
+            self.pick_pos_btn.config(state=state)
                         
     def pick_position(self):
         self.root.iconify()
@@ -1037,10 +1043,6 @@ class Autoclicker:
         
         canvas.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
-        
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
-        canvas.bind_all('<MouseWheel>', on_mousewheel)
         
         sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
         sections_frame.pack(fill='x', pady=10)
@@ -1161,41 +1163,29 @@ class Autoclicker:
         except ValueError:
             pass
 
-    # ============== SAVE AND LOAD RECORDING METHODS ==============
     def save_recording(self):
-        """Save current recording to a file"""
         if not self.recorded_actions:
             messagebox.showinfo("No Recording", "No recording to save!")
             return
-            
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Save Recording"
-        )
-        
+        file_path = filedialog.asksaveasfilename(defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")], title="Save Recording")
         if file_path:
             try:
                 with open(file_path, 'w') as f:
                     json.dump(self.recorded_actions, f, indent=2)
-                messagebox.showinfo("Success", f"Recording saved to {os.path.basename(file_path)}")
+                messagebox.showinfo("Success", f"Recording saved!")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save: {str(e)}")
                 
     def load_recording(self):
-        """Load a recording from a file"""
-        file_path = filedialog.askopenfilename(
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Load Recording"
-        )
-        
+        file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Load Recording")
         if file_path:
             try:
                 with open(file_path, 'r') as f:
                     self.recorded_actions = json.load(f)
                 self.update_actions_count()
                 self.record_status_var.set(f"Loaded {len(self.recorded_actions)} actions")
-                messagebox.showinfo("Success", f"Recording loaded: {os.path.basename(file_path)}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load: {str(e)}")
 
@@ -1214,10 +1204,6 @@ class Autoclicker:
         
         canvas.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
-        
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
-        canvas.bind_all('<MouseWheel>', on_mousewheel)
         
         sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
         sections_frame.pack(fill='x', pady=10)
@@ -1273,7 +1259,7 @@ class Autoclicker:
                 font=('Segoe UI', 10), bg=self.colors['bg_input'],
                 fg=self.colors['text'], relief='flat').pack(side='left', padx=5, ipady=2)
         
-        self.macro_loop_check = self.create_checkbox(macro_options_frame, "Loop macro", self.macro_loop_var)
+        self.macro_loop_check = self.create_checkbox(macro_options_frame, "Loop", self.macro_loop_var)
         self.macro_loop_check.pack(side='left', padx=(15, 0))
         
         # Macro Editor
@@ -1332,10 +1318,6 @@ class Autoclicker:
         
         canvas.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
-        
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
-        canvas.bind_all('<MouseWheel>', on_mousewheel)
         
         sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
         sections_frame.pack(fill='x', pady=10)
@@ -1453,10 +1435,6 @@ class Autoclicker:
         canvas.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
         
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
-        canvas.bind_all('<MouseWheel>', on_mousewheel)
-        
         sections_frame = tk.Frame(scrollable, bg=self.colors['bg'], padx=5)
         sections_frame.pack(fill='x', pady=10)
         
@@ -1468,7 +1446,6 @@ class Autoclicker:
         stats_grid = tk.Frame(stats_card, bg=self.colors['bg_light'])
         stats_grid.pack(fill='x', pady=20)
         
-        # Create stats in two columns
         left_col = tk.Frame(stats_grid, bg=self.colors['bg_light'])
         left_col.pack(side='left', fill='both', expand=True, padx=20)
         
@@ -1495,7 +1472,6 @@ class Autoclicker:
             val_label.pack(side='right')
             self.stat_labels[stat_id] = val_label
         
-        # Control button
         control_frame = tk.Frame(stats_card, bg=self.colors['bg_light'])
         control_frame.pack(pady=20)
         
@@ -1580,7 +1556,7 @@ class Autoclicker:
         self.root.attributes('-topmost', self.always_on_top_var.get())
         
     def change_theme(self):
-        messagebox.showinfo("Theme", "Restart to apply.")
+        messagebox.showinfo("Theme", "Restart to apply theme change.")
         self.config['theme'] = self.theme_var.get()
         self.save_config()
         
@@ -1678,7 +1654,7 @@ class Autoclicker:
         
         self.record_status_var.set("Recording...")
         self.update_rec_status_indicator(self.colors['danger'])
-        self.record_btn.config(text="⏹ STOP RECORDING (F7)", bg=self.colors['warning'])
+        self.record_btn.config(text="⏹ STOP (F7)", bg=self.colors['warning'])
         self.update_status("Recording", self.colors['danger'])
         self.update_actions_count()
         
@@ -1754,7 +1730,7 @@ class Autoclicker:
         
         self.play_status_var.set("Playing...")
         self.update_play_status_indicator(self.colors['success'])
-        self.play_btn.config(text="⏹ STOP PLAYBACK (F8)", bg=self.colors['danger'])
+        self.play_btn.config(text="⏹ STOP (F8)", bg=self.colors['danger'])
         self.update_status("Playing", self.colors['success'])
         
         threading.Thread(target=self._playback_loop, daemon=True).start()
@@ -1800,7 +1776,7 @@ class Autoclicker:
     def _playback_finished(self):
         self.play_status_var.set("Stopped")
         self.update_play_status_indicator(self.colors['text_dim'])
-        self.play_btn.config(text="▶ PLAY RECORDING (F8)", bg=self.colors['success'])
+        self.play_btn.config(text="▶ PLAY (F8)", bg=self.colors['success'])
         self.play_progress_var.set("")
         self.update_status("Ready", self.colors['text'])
         
@@ -1824,7 +1800,7 @@ class Autoclicker:
         
         self.macro_status_var.set("Recording...")
         self.update_macro_status_indicator(self.colors['danger'])
-        self.macro_record_btn.config(text="⏹ STOP RECORDING (F10)", bg=self.colors['warning'])
+        self.macro_record_btn.config(text="⏹ STOP (F10)", bg=self.colors['warning'])
         self.update_status("Recording Macro", self.colors['purple'])
         self.update_macro_count()
         
@@ -1849,7 +1825,7 @@ class Autoclicker:
         if hasattr(self, 'macro_kb_listener'): self.macro_kb_listener.stop()
         self.macro_status_var.set(f"Recorded {len(self.macro_actions)} actions")
         self.update_macro_status_indicator(self.colors['text_dim'])
-        self.macro_record_btn.config(text="⏺ RECORD MACRO (F10)", bg=self.colors['purple'])
+        self.macro_record_btn.config(text="⏺ RECORD (F10)", bg=self.colors['purple'])
         self.update_status("Ready", self.colors['text'])
         
     def toggle_macro_playback(self):
@@ -1904,7 +1880,7 @@ class Autoclicker:
     def _macro_playback_finished(self):
         self.macro_status_var.set("Stopped")
         self.update_macro_status_indicator(self.colors['text_dim'])
-        self.macro_play_btn.config(text="▶ PLAY MACRO (F11)", bg=self.colors['success'])
+        self.macro_play_btn.config(text="▶ PLAY (F11)", bg=self.colors['success'])
         self.update_status("Ready", self.colors['text'])
         
     def stop_macro_playback(self):
@@ -2132,14 +2108,10 @@ def main():
         app = Autoclicker()
         app.run()
     
-    # Check if Firebase is configured
     if 'YOUR_PROJECT_ID' in FIREBASE_CONFIG['database_url']:
-        # Firebase not configured - run without key system
         print("NOTE: Firebase not configured. Running without license system.")
-        print("To enable: Edit FIREBASE_CONFIG in the script with your Firebase details.")
         start_app()
     else:
-        # Run with key system
         LoginWindow(start_app)
 
 if __name__ == "__main__":
